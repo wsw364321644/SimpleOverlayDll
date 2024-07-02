@@ -2,28 +2,31 @@ cmake_minimum_required(VERSION 3.24)
 include(FetchContent)
 include(CMakePackageConfigHelpers)
 
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(MY_PRODUCT_NUMBER 1)
 set(MY_PRODUCT_VERSION 0)
 set(MY_BUILD_NUMBER 0)
 set(VERSION "${MY_PRODUCT_NUMBER}.${MY_PRODUCT_VERSION}.${MY_BUILD_NUMBER}")
 
-set(OVERLAY_UTIL_TAG f5a345c2f171041c3db7d4399751cfb1b3f362c4)
+set(OVERLAY_UTIL_TAG 441250dfddba8d53b52e69a5cefb371d2188af9d)
 
-option(OVERLAY_STATIC_CRT "OVERLAY STATIC CRT Build ." OFF)
-
-if(OVERLAY_STATIC_CRT)
-  if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-  endif()
-
-  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
-  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
-endif()
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 project(simple_overlay_dll VERSION ${VERSION})
 enable_language(CXX ASM)
 
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+endif()
+
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
+
+
+set(UTILPP_WITH_STATIC_LIBUV ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
   overlay-util
   GIT_REPOSITORY git@github.com:wsw364321644/overlay-util.git

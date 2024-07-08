@@ -196,7 +196,12 @@ BOOL WINAPI DllMain(_In_ HINSTANCE hinstDLL, _In_ DWORD fdwReason, _In_ LPVOID l
     switch (fdwReason)
     {
     case DLL_PROCESS_ATTACH: {
-        CreateAsyncLogger(LoggerSetting_t{ "",{std::make_shared<RotatingLoggerInfo_t>("graphics_hook.log"),std::make_shared<MSVCLoggerInfo_t>(),std::make_shared<StdoutLoggerInfo_t>()} });
+        auto logger=CreateAsyncLogger(LoggerSetting_t{ "",{std::make_shared<RotatingLoggerInfo_t>("graphics_hook.log"),std::make_shared<MSVCLoggerInfo_t>(),std::make_shared<StdoutLoggerInfo_t>()} });
+#ifdef NDEBUG
+        logger->set_level(spdlog::level::warn);
+#else
+        logger->set_level(spdlog::level::debug);
+#endif
         dll_inst = hinstDLL;
         wchar_t name[MAX_PATH];
 

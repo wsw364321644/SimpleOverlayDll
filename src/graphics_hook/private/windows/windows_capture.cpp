@@ -41,55 +41,64 @@ static input_data_t input_data = {};
 static std::unordered_map<WPARAM,MsgProcessorHandle_t> MsgProcessorList;
 LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
 {
-    if (code >= 0)
-    {
-        MSG& msg = *(PMSG)lParam;
-        //SIMPLELOG_LOGGER_TRACE(ENGINE_LOG_NAME, "Hook receive hwnd {},msg {},l {},w {}", (intptr_t)msg.hwnd, msg.message, msg.lParam, msg.wParam);
-        if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST) {
+    MSG& msg = *(PMSG)lParam;
+    if (code < 0){
+        goto end_hook;
+    }
+    
+    //SIMPLELOG_LOGGER_TRACE(ENGINE_LOG_NAME, "Hook receive hwnd {},msg {},l {},w {}", (intptr_t)msg.hwnd, msg.message, msg.lParam, msg.wParam);
 
+    if (msg.message == overlay_async_msg) {
+        auto res=MsgProcessorList.find(msg.wParam);
+        if (res != MsgProcessorList.end()) {
+            res->second.Fn(msg.lParam);
         }
-        if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) || (msg.message >= WM_SYSKEYDOWN && msg.message <= WM_SYSDEADCHAR)) {
-
-        }
-        if (msg.message == overlay_async_msg) {
-            auto res=MsgProcessorList.find(msg.wParam);
-            if (res != MsgProcessorList.end()) {
-                res->second.Fn(msg.lParam);
-            }
-            msg.message = WM_NULL;
-            return CallNextHookEx(NULL, code, wParam, lParam);
-        }
-        switch (msg.message) {
-        case WM_SYSKEYDOWN:
-        case WM_KEYDOWN:
-            msg.message = WM_NULL;
-            SDL_Scancode scanCode = WindowsScanCodeToSDLScanCode(msg.lParam, msg.wParam);
-            SDL_Keycode code = SDL_GetKeyFromScancode(scanCode);
-            auto oldExpectList = HotKeyState.ExpectList;
-            HotKeyList_t& list = *HotKeyState.ExpectList;
-            for (auto node : list) {
-                if (node.HotKey.key_code != code) {
-                    continue;
-                }
-                if (!WindowsCheckModifier(node.HotKey.mod,input_data.RealGetKeyState)) {
-                    break;
-                }
-                if (std::holds_alternative<std::string>(node.Child)) {
-                    trigger_hotkey(std::get<std::string>(node.Child));
-                }
-                else {
-                    HotKeyState.ExpectList = &std::get<HotKeyList_t>(node.Child);
-                }
-
-                break;
-            }
-            if (oldExpectList == HotKeyState.ExpectList) {
-                HotKeyState.ExpectList = &HotKeyList;
-            }
-            break;
-        }
+        msg.message = WM_NULL;
+        goto end_hook;
     }
 
+    if (!is_pipe_active()) {
+        goto end_hook;
+    }
+
+    switch (msg.message) {
+    case WM_SYSKEYDOWN:
+    case WM_KEYDOWN:
+        SDL_Scancode scanCode = WindowsScanCodeToSDLScanCode(msg.lParam, msg.wParam);
+        SDL_Keycode keyCode = SDL_GetKeyFromScancode(scanCode);
+        auto oldExpectList = HotKeyState.ExpectList;
+        HotKeyList_t& list = *HotKeyState.ExpectList;
+        for (auto node : list) {
+            if (node.HotKey.key_code != keyCode) {
+                continue;
+            }
+            if (!WindowsCheckModifier(node.HotKey.mod,input_data.RealGetKeyState)) {
+                break;
+            }
+            if (std::holds_alternative<std::string>(node.Child)) {
+                trigger_hotkey(std::get<std::string>(node.Child));
+            }
+            else {
+                HotKeyState.ExpectList = &std::get<HotKeyList_t>(node.Child);
+            }
+
+            break;
+        }
+        if (oldExpectList == HotKeyState.ExpectList) {
+            HotKeyState.ExpectList = &HotKeyList;
+        }
+        break;
+    }
+    OverlayImplWin32WndProcHandler(msg.hwnd, msg.message, msg.wParam, msg.lParam);
+
+    if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST) {
+        msg.message = WM_NULL;
+    }
+    if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) || (msg.message >= WM_SYSKEYDOWN && msg.message <= WM_SYSDEADCHAR)) {
+        msg.message = WM_NULL;
+    }
+    
+end_hook:
     // call the next hook in the hook chain. This is nessecary or your hook chain will break and the hook stops
     return CallNextHookEx(NULL, code, wParam, lParam);
 }

@@ -41,7 +41,7 @@ volatile bool overlay_active = false;
 
 static SimpleValueHandle_t HotKeyListHandle;
 static SimpleValueHandle_t SharedWindowInfosHandle;
-
+static SimpleValueHandle_t OverlayEnableHandle;
 
 static unsigned int shmem_id_counter = 0;
 static CommonHandle_t* shmem_handle = NULL;
@@ -129,6 +129,7 @@ bool init_pipe(void)
 		PMessageProcesser = nullptr;
 		HookThreadSharedWindowInfos.clear();
 		SimpleValueStorage::SetValue(SharedWindowInfosHandle, HookThreadSharedWindowInfos);
+		SimpleValueStorage::SetValue(OverlayEnableHandle, false);
 		});
 
 	return true;
@@ -161,7 +162,7 @@ bool init_hook_info(void)
 				async_overlay(HOTKEYLIST_UPDATE, NULL);
 			}
 			HotKeyState.ExpectList = &HotKeyList;
-			return false;
+			return true;
 		}
 	);
 	SimpleValueStorage::RegisterValueChange(SharedWindowInfosHandle,
@@ -174,7 +175,20 @@ bool init_hook_info(void)
 			if (!SimpleValueStorage::GetValue(SharedWindowInfosHandle, SharedWindowInfos)) {
 				async_overlay(SHARED_WINDOW_INFOS_UPDATE, NULL);
 			}
-			return false;
+			return true;
+		}
+	);
+	SimpleValueStorage::RegisterValueChange(OverlayEnableHandle,
+		[](SimpleValueHandle_t, const void*, const void*) {
+			async_overlay(OVERLAY_ENABLE, NULL);
+		}
+	);
+	register_overlay_async_processor(OVERLAY_ENABLE,
+		[](LPARAM lParam)->bool {
+			if (!SimpleValueStorage::GetValue(OverlayEnableHandle, global_hook_info->bOverlayEnabled)) {
+				async_overlay(OVERLAY_ENABLE, NULL);
+			}
+			return true;
 		}
 	);
     hook_info_handle = CreateSharedMemory(GetNamePlusID(SHMEM_HOOK_INFO, processID).c_str(), sizeof(hook_info_t));
@@ -761,4 +775,41 @@ void trigger_hotkey(std::string_view name)
 	if (name==OVERLAY_HOT_KEY_NAME) {
 		global_hook_info->bOverlayEnabled= !global_hook_info->bOverlayEnabled;
 	}
+}
+void on_mouse_move_event(uint64_t id, mouse_motion_event_t e) {
+	if (!PRPCProcesser) {
+		return;
+	}
+	SIMPLELOG_LOGGER_DEBUG(nullptr, "mouse_motion_event_t: x {} y {} dx {} xy {}", e.x, e.y, e.xrel, e.yrel);
+	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
+	HookHelperEventInterface->OverlayMouseMotionEvent(id, e);
+}
+
+void on_mouse_button_event(uint64_t id,mouse_button_event_t e) {
+	if (!PRPCProcesser) {
+		return;
+	}
+	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
+	HookHelperEventInterface->OverlayMouseButtonEvent(id, e);
+}
+void on_mouse_wheel_event(uint64_t id, mouse_wheel_event_t e) {
+	if (!PRPCProcesser) {
+		return;
+	}
+	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
+	HookHelperEventInterface->OverlayMouseWheelEvent(id, e);
+}
+void on_keyboard_event(uint64_t id, keyboard_event_t e) {
+	if (!PRPCProcesser) {
+		return;
+	}
+	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
+	HookHelperEventInterface->OverlayKeyboardEvent(id, e);
+}
+void on_window_event(uint64_t id, window_event_t e) {
+	if (!PRPCProcesser) {
+		return;
+	}
+	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
+	HookHelperEventInterface->OverlayWindowEvent(id, e);
 }

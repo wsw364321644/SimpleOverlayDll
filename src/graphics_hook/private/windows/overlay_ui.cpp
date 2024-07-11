@@ -48,10 +48,12 @@ void destroy_overlay_ui()
 
 void overlay_ui_new_frame()
 {
+    static ImVec2 lastMousePos{ -FLT_MAX, -FLT_MAX };
     ImGuiIO& io = ImGui::GetIO();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
     ImGui::ShowDemoWindow(&show_demo_window);
+    
     for (auto& pwinInfo : SharedWindowInfos) {
         auto windowType = pwinInfo->Info->hook_window_type;
         
@@ -104,10 +106,13 @@ void overlay_ui_new_frame()
                 on_mouse_wheel_event(pwinInfo->Id, mouse_wheel_event_t{ mouseXInWindow,mouseYInWindow,
                     io.MouseWheel, io.MouseWheelH });
             }
-            if (io.MouseDelta.x>0|| io.MouseDelta.y>0) {
-                on_mouse_move_event(pwinInfo->Id, mouse_motion_event_t{ mouseXInWindow,mouseYInWindow,
-                   (int32_t)io.MouseDelta.x, (int32_t)io.MouseDelta.y });
+            if (lastMousePos.x != -FLT_MAX && lastMousePos.y != -FLT_MAX || io.MousePos.x != -FLT_MAX && io.MousePos.y != -FLT_MAX) {
+                if (memcmp(&io.MousePos, &lastMousePos,sizeof(ImVec2))!=0) {
+                    on_mouse_move_event(pwinInfo->Id, mouse_motion_event_t{ mouseXInWindow,mouseYInWindow,
+                   (int32_t)(io.MousePos.x- lastMousePos.x), (int32_t)(io.MousePos.y - lastMousePos.y) });
+                }
             }
+
 
 
             for (ImGuiKey key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_COUNT; key = (ImGuiKey)(key + 1)) {
@@ -150,6 +155,8 @@ void overlay_ui_new_frame()
     }
 
     ImGui::EndFrame();
+
+    lastMousePos = io.MousePos;
 }
 
 ImDrawData* overlay_ui_render()

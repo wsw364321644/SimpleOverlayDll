@@ -8,7 +8,9 @@ set(MY_PRODUCT_VERSION 0)
 set(MY_BUILD_NUMBER 0)
 set(VERSION "${MY_PRODUCT_NUMBER}.${MY_PRODUCT_VERSION}.${MY_BUILD_NUMBER}")
 
-set(OVERLAY_UTIL_TAG fc3048ba22ba8ac1f8c70fd4e789bcd67fcb7f0b)
+set(UTILPP_TAG e2baf17e36d79813f6954292143a70a8b000577c)
+set(OCmakeUtil_TAG 164182c869144e187528119b0eb0fc947ae35707)
+set(OVERLAY_UTIL_TAG 33b767427c2db9805717d96e17fed1057b005afc)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -31,15 +33,26 @@ endif()
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
 
+FetchContent_Declare(
+  OCmakeUtil
+  GIT_REPOSITORY git@ssh.github.com:wsw364321644/OCmakeUtil.git
+  GIT_TAG ${OCmakeUtil_TAG}
+)
+
+FetchContent_Declare(
+  utilpp
+  GIT_REPOSITORY git@ssh.github.com:wsw364321644/utilpp.git
+  GIT_TAG ${UTILPP_TAG}
+)
 
 set(UTILPP_WITH_STATIC_LIBUV ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
   overlay-util
-  GIT_REPOSITORY git@github.com:wsw364321644/overlay-util.git
+  GIT_REPOSITORY git@ssh.github.com:wsw364321644/overlay-util.git
   GIT_TAG ${OVERLAY_UTIL_TAG}
   GIT_SUBMODULES_RECURSE true
 )
-FetchContent_MakeAvailable(overlay-util)
+FetchContent_MakeAvailable(overlay-util OCmakeUtil utilpp)
 
 ImportProject(Detours SSH FIND TAG 4b8c659f549b0ab21cf649377c7a84eb708f5e68) # 4.0.1
 ImportTarget(imgui SSH TAG 6ccc561a2ab497ad4ae6ee1dbd3b992ffada35cb) # v1.90.6

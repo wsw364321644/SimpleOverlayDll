@@ -100,7 +100,7 @@ void overlay_ui_new_frame()
                 on_mouse_button_event(pwinInfo->Id, mouse_button_event_t{ EPressedState::Up,EMouseButtonType::Middle,1,
                     mouseXInWindow,mouseYInWindow });
             }
-            if (io.MouseWheel>0|| io.MouseWheelH>0) {
+            if (io.MouseWheel!=0|| io.MouseWheelH != 0) {
                 on_mouse_wheel_event(pwinInfo->Id, mouse_wheel_event_t{ mouseXInWindow,mouseYInWindow,
                     io.MouseWheel, io.MouseWheelH });
             }

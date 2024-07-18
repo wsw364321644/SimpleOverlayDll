@@ -63,6 +63,7 @@ void overlay_ui_new_frame()
         ImGuiWindowFlags flags{ 0 };
         flags |= ImGuiWindowFlags_NoBackground|
             ImGuiWindowFlags_NoCollapse| ImGuiWindowFlags_NoScrollbar;
+
         if (windowType == EHookWindowType::Background) {
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(viewport->Pos);
@@ -74,15 +75,19 @@ void overlay_ui_new_frame()
         //ImVec2 CursorScreenPos = ImGui::GetCursorScreenPos();
         
         //ImVec2 WindowScreenPos(CursorScreenPos.x - CursorPos.x, CursorScreenPos.y - CursorPos.y);
-        ImVec2 WindowScreenPos = ImGui::GetCursorPos();
-        ImVec2 canvas_max_pos = ImVec2(WindowScreenPos.x + pwinInfo->Info->width, WindowScreenPos.y + pwinInfo->Info->height);
 
-        ImGui::GetWindowDrawList()->AddImage((ImTextureID)pwinInfo->WindowTextureID, 
-            WindowScreenPos, canvas_max_pos);
-        ImVec2 WindowsBase = ImGui::GetCursorScreenPos();
-        int32_t mouseXInWindow = io.MousePos.x - WindowsBase.x;
-        int32_t mouseYInWindow = io.MousePos.y - WindowsBase.y;
+        ImVec2 WindowScreenPos = ImGui::GetCursorScreenPos();
+        int32_t mouseXInWindow = io.MousePos.x - WindowScreenPos.x;
+        int32_t mouseYInWindow = io.MousePos.y - WindowScreenPos.y;
+
         ImGui::InvisibleButton(buttonName.c_str(), ImVec2{(float)pwinInfo->Info->width, (float)pwinInfo->Info->height});
+        const ImVec2 p0 = ImGui::GetItemRectMin();
+        const ImVec2 p1 = ImGui::GetItemRectMax();
+
+
+        ImGui::GetWindowDrawList()->AddImage((ImTextureID)pwinInfo->WindowTextureID,
+            p0, p1);
+
 
         if (ImGui::IsItemFocused()) {
             if (!pwinInfo->bPreFocused) {
@@ -104,7 +109,7 @@ void overlay_ui_new_frame()
             }
             if (io.MouseWheel!=0|| io.MouseWheelH != 0) {
                 on_mouse_wheel_event(pwinInfo->Id, mouse_wheel_event_t{ mouseXInWindow,mouseYInWindow,
-                    io.MouseWheel, io.MouseWheelH });
+                     io.MouseWheelH,io.MouseWheel});
             }
             if (lastMousePos.x != -FLT_MAX && lastMousePos.y != -FLT_MAX || io.MousePos.x != -FLT_MAX && io.MousePos.y != -FLT_MAX) {
                 if (memcmp(&io.MousePos, &lastMousePos,sizeof(ImVec2))!=0) {

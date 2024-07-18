@@ -397,7 +397,7 @@ bool capture_should_init(void)
 	bool should_init = false;
 
 	if (!is_capture_active()) {
-		if (is_capture_restarted()) {
+		//if (is_capture_restarted()) {
 			if (capture_alive()) {
 				should_init = true;
 			}
@@ -405,11 +405,11 @@ bool capture_should_init(void)
 				SIMPLELOG_LOGGER_TRACE(nullptr,
 					"capture_should_init: inactive, restarted, not alive");
 			}
-		}
-		else {
-			SIMPLELOG_LOGGER_TRACE(nullptr,
-				"capture_should_init: inactive, not restarted");
-		}
+		//}
+		//else {
+		//	SIMPLELOG_LOGGER_TRACE(nullptr,
+		//		"capture_should_init: inactive, not restarted");
+		//}
 	}
 
 	return should_init;

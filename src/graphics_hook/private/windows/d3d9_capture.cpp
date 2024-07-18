@@ -73,19 +73,18 @@ struct d3d9_data {
 };
 
 static struct d3d9_data data = {};
-typedef struct SharedWindowGraphicInfo_t {
-	ComPtr<IDirect3DTexture9> CopyTexDX9;
-	ComPtr<IDirect3DSurface9> CopySurfaceDX9;
-	ComPtr<IDirect3DTexture9> WindowTexDX9;
-	ComPtr<IDirect3DSurface9> WindowSurfaceDX9;
-	ComPtr<IDirect3DSurface9> TempSurfaceDX9;
-	ComPtr<ID3D11Texture2D> WindowTexDX11;
-	ComPtr<ID3D11Texture2D> CopyTexDX11;
-	ComPtr<ID3D11Texture2D> TestTexDX11;
+typedef struct DX9SharedWindowGraphicInfo_t {
+	ComPtr<IDirect3DTexture9> CopyTexDX9{ nullptr };
+	ComPtr<IDirect3DSurface9> CopySurfaceDX9{ nullptr };
+	ComPtr<IDirect3DTexture9> WindowTexDX9{ nullptr };
+	ComPtr<IDirect3DSurface9> WindowSurfaceDX9{ nullptr };
+	ComPtr<IDirect3DSurface9> TempSurfaceDX9{ nullptr };
+	ComPtr<ID3D11Texture2D> WindowTexDX11{ nullptr };
+	ComPtr<ID3D11Texture2D> CopyTexDX11{ nullptr };
+	ComPtr<ID3D11Texture2D> TestTexDX11{ nullptr };
 
-}SharedWindowGraphicInfo_t;
-static std::unordered_map<uint64_t,std::shared_ptr<SharedWindowGraphicInfo_t>>  SharedWindowGraphicInfos;
-static IDirect3DSurface9* gbackbuffer;
+}DX9SharedWindowGraphicInfo_t;
+static std::unordered_map<uint64_t,std::shared_ptr<DX9SharedWindowGraphicInfo_t>>  SharedWindowGraphicInfos;
 static void d3d9_free()
 {
 	capture_free();
@@ -289,7 +288,7 @@ static void setup_render_state(ImDrawData* draw_data) {
 		data.device->SetTransform(D3DTS_PROJECTION, &mat_projection);
 	}
 }
-void dx9_render_draw_data(ImDrawData* draw_data) {
+static void dx9_render_draw_data(ImDrawData* draw_data) {
 	// Avoid rendering when minimized
 	if (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)
 		return;
@@ -867,7 +866,7 @@ static void d3d9_window_update()
 	std::set<uint64_t> needDel;
 	std::transform(SharedWindowGraphicInfos.cbegin(), SharedWindowGraphicInfos.cend(),
 		std::inserter(needDel, needDel.begin()),
-		[](const std::pair<uint64_t, std::shared_ptr<SharedWindowGraphicInfo_t>>& key_value)
+		[](const std::pair<uint64_t, std::shared_ptr<DX9SharedWindowGraphicInfo_t>>& key_value)
 		{ return key_value.first; });
 
 	for (auto& windowInfo : SharedWindowInfos) {
@@ -877,11 +876,11 @@ static void d3d9_window_update()
 		if (SharedWindowGraphicInfos.contains(id)) {
 			continue;
 		}
-		auto res = SharedWindowGraphicInfos.emplace(id, std::make_shared<SharedWindowGraphicInfo_t>());
+		auto res = SharedWindowGraphicInfos.emplace(id, std::make_shared<DX9SharedWindowGraphicInfo_t>());
 		if (!res.second) {
 			continue;
 		}
-		auto pinfo = res.first->second;
+		auto& pinfo = res.first->second;
 
 
 		if (windowInfo->Info->bNT_shared) {
@@ -952,7 +951,7 @@ static void d3d9_window_update()
 
 		HANDLE copyHandle{NULL};
 		d3d9_patch();
-		hr = data.device->CreateTexture(data.cx, data.cy, 1,
+		hr = data.device->CreateTexture(windowInfo->Info->width, windowInfo->Info->height, 1,
 			D3DUSAGE_RENDERTARGET, data.d3d9_format, D3DPOOL_DEFAULT, &pinfo->CopyTexDX9, &copyHandle);
 		d3d9_unpatch();
 		if (FAILED(hr)) {
@@ -970,6 +969,7 @@ static void d3d9_window_update()
 			d3d9_remove_window(id);
 			continue;
 		}
+		windowInfo->WindowTextureID = (intptr_t)pinfo->CopyTexDX9.Get();
 
 		//test code check data in dx9 texture
 		//hr = data.device->CreateTexture(desc.Width, desc.Height, 1,
@@ -985,7 +985,11 @@ static void d3d9_window_update()
 		//}
 		//hr = data.device->CreateOffscreenPlainSurface(desc.Width, desc.Height,
 		//	data.d3d9_format,D3DPOOL_SYSTEMMEM,&pinfo->TempSurfaceDX9,NULL);
-		windowInfo->WindowTextureID = (intptr_t)pinfo->CopyTexDX9.Get();
+		//if (FAILED(hr)) {
+		//	d3d9_remove_window(id);
+		//	continue;
+		//}
+		
 	}
 	for (auto& id : needDel) {
 		SharedWindowGraphicInfos.erase(id);
@@ -1024,7 +1028,6 @@ static void d3d9_window_update()
 	for (auto& id : needDel) {
 		SharedWindowGraphicInfos.erase(id);
 	}
-
 }
 static inline HRESULT get_backbuffer(IDirect3DDevice9* device,
 	IDirect3DSurface9** surface)
@@ -1136,9 +1139,8 @@ static void d3d9_capture(IDirect3DDevice9* device,
 
 	
 	if (is_capture_active() ) {
-		gbackbuffer = backbuffer;
 		d3d9_window_update();
-		if (global_hook_info->bOverlayEnabled) {
+		if (is_overlay_active()) {
 			overlay_ui_new_frame();
 			data.device->BeginScene();
 			dx9_render_draw_data(overlay_ui_render());

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graphics_hook.h"
+#include <dxgi.h>
 #include <LoggerHelper.h>
 static inline DXGI_FORMAT strip_dxgi_format_srgb(DXGI_FORMAT format)
 {

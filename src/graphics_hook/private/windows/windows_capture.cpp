@@ -89,15 +89,16 @@ LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
         }
         break;
     }
-    OverlayImplWin32WndProcHandler(msg.hwnd, msg.message, msg.wParam, msg.lParam);
+    if (is_overlay_active()) {
+        OverlayImplWin32WndProcHandler(msg.hwnd, msg.message, msg.wParam, msg.lParam);
 
-    if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST) {
-        msg.message = WM_NULL;
+        if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST) {
+            msg.message = WM_NULL;
+        }
+        if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) || (msg.message >= WM_SYSKEYDOWN && msg.message <= WM_SYSDEADCHAR)) {
+            msg.message = WM_NULL;
+        }
     }
-    if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) || (msg.message >= WM_SYSKEYDOWN && msg.message <= WM_SYSDEADCHAR)) {
-        msg.message = WM_NULL;
-    }
-    
 end_hook:
     // call the next hook in the hook chain. This is nessecary or your hook chain will break and the hook stops
     return CallNextHookEx(NULL, code, wParam, lParam);
@@ -139,7 +140,7 @@ static bool hook_Windows_msg()
 }
 
 static SHORT HookGetAsyncKeyState(_In_ int vKey) {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         return 0;
     }
     else {
@@ -147,7 +148,7 @@ static SHORT HookGetAsyncKeyState(_In_ int vKey) {
     }
 }
 static SHORT HookGetKeyState(_In_ int vKey) {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         return 0;
     }
     else {
@@ -155,7 +156,7 @@ static SHORT HookGetKeyState(_In_ int vKey) {
     }
 }
 static BOOL HookGetKeyboardState(__out_ecount(256) PBYTE lpKeyState) {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         memset(lpKeyState, 0, 256);
         return TRUE;
     }
@@ -164,7 +165,7 @@ static BOOL HookGetKeyboardState(__out_ecount(256) PBYTE lpKeyState) {
     }
 }
 static INT HookShowCursor(__in BOOL bShow) {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         return 0;
     }
     else {
@@ -172,7 +173,7 @@ static INT HookShowCursor(__in BOOL bShow) {
     }
 }
 static BOOL HookGetCursorPos(LPPOINT lpPoint) {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         return FALSE;
     }
     else {
@@ -180,7 +181,7 @@ static BOOL HookGetCursorPos(LPPOINT lpPoint) {
     }
 }
 static BOOL HookSetCursorPos(int X, int Y) {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         return FALSE;
     }
     else {
@@ -188,7 +189,7 @@ static BOOL HookSetCursorPos(int X, int Y) {
     }
 }
 static HCURSOR HookGetCursor() {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         return 0;
     }
     else {
@@ -196,7 +197,7 @@ static HCURSOR HookGetCursor() {
     }
 }
 static HCURSOR HookSetCursor(HCURSOR cursor) {
-    if (global_hook_info->bOverlayEnabled) {
+    if (is_overlay_active()) {
         return 0;
     }
     else {

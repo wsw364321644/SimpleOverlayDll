@@ -1,8 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include <simple_os_defs.h>
 #include <HOOK/graphics_info.h>
-
 
 #include "game_hook.h"
 

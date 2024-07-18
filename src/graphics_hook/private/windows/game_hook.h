@@ -19,6 +19,7 @@ typedef struct SharedWindowInfo_t {
     CommonHandle_t* ShmemHandle{ nullptr };
     bool bPreFocused{false};
     hook_window_info_t* Info{ nullptr };
+    RPCHandle_t RemoveHandle;
 }SharedWindowInfo_t;
 typedef std::vector<std::shared_ptr<SharedWindowInfo_t>> SharedWindowInfos_t;
 

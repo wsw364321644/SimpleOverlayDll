@@ -36,7 +36,6 @@ HWND dummy_window = NULL;
 HINSTANCE dll_inst = NULL;
 volatile bool active = false;
 volatile bool pipe_active = false;
-volatile bool overlay_active = false;
 
 
 static SimpleValueHandle_t HotKeyListHandle;
@@ -114,6 +113,18 @@ void init_new_pipe_client(IMessageClient* pClient) {
 		HookThreadSharedWindowInfos.emplace_back(std::make_shared<SharedWindowInfo_t>(SharedWindowInfo_t{ .Id = id,.ShmemHandle= shmemHandle,.Info= info }));
 		SimpleValueStorage::SetValue(SharedWindowInfosHandle, HookThreadSharedWindowInfos);
 		});
+	HookHelperInterface->RegisterRemoveWindow([HookHelperInterface](RPCHandle_t handle, uint64_t id) {
+		auto itr=std::find_if(HookThreadSharedWindowInfos.begin(), HookThreadSharedWindowInfos.end(),
+			[id](const std::shared_ptr<SharedWindowInfo_t>& info) {
+				return info->Id == id;
+			});
+		if (itr == HookThreadSharedWindowInfos.end()) {
+			return;
+		}
+		(*itr)->RemoveHandle = handle;
+		HookThreadSharedWindowInfos.erase(itr);
+		SimpleValueStorage::SetValue(SharedWindowInfosHandle, HookThreadSharedWindowInfos);
+		});
 }
 
 bool init_pipe(void)
@@ -172,9 +183,23 @@ bool init_hook_info(void)
 	);
 	register_overlay_async_processor(SHARED_WINDOW_INFOS_UPDATE,
 		[](LPARAM lParam)->bool {
+			auto oldSharedWindowInfos = SharedWindowInfos;
 			if (!SimpleValueStorage::GetValue(SharedWindowInfosHandle, SharedWindowInfos)) {
 				async_overlay(SHARED_WINDOW_INFOS_UPDATE, NULL);
 			}
+			for (auto info: oldSharedWindowInfos) {
+				auto itr=std::find_if(SharedWindowInfos.begin(), SharedWindowInfos.end(),
+					[info](std::shared_ptr<SharedWindowInfo_t> newinfo) {
+						return newinfo->Id == info->Id;
+					});
+				if (itr == SharedWindowInfos.end()&& info->RemoveHandle.IsValid()) {
+					if (PRPCProcesser) {
+						auto HookHelperInterface = PRPCProcesser->GetInterface<JRPCHookHelperAPI>();
+						HookHelperInterface->RespondRemoveWindow(info->RemoveHandle);
+					}
+				}
+			}
+
 			return true;
 		}
 	);
@@ -767,7 +792,7 @@ void capture_free(void)
 
 bool is_overlay_active()
 {
-	return overlay_active;
+	return global_hook_info->bOverlayEnabled;
 }
 
 void trigger_hotkey(std::string_view name)

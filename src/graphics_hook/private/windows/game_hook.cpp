@@ -32,6 +32,7 @@ HANDLE signal_stop = NULL;
 HANDLE signal_ready = NULL;
 HANDLE signal_exit = NULL;
 HANDLE signal_init = NULL;
+HANDLE ready_mutex = NULL;
 HWND dummy_window = NULL;
 HINSTANCE dll_inst = NULL;
 volatile bool active = false;
@@ -62,7 +63,22 @@ static inline void close_handle(HANDLE* handle)
 	}
 }
 
-static inline bool capture_alive(void)
+static inline bool set_capture_ready_mutex(bool bready)
+{
+	bool success{true};
+	if (bready) {
+		ready_mutex = create_mutex_plus_id(HOOK_READY_KEEPALIVE, GetCurrentProcessId(), false);
+		success = ready_mutex != NULL;
+	}
+	else {
+		if (ready_mutex) {
+			close_handle(&ready_mutex);
+		}
+	}
+	return success;
+}
+
+static inline bool is_capture_server_alive(void)
 {
 	static char keepalive_name[64] = { 0 };
 	static bool inited{ false };
@@ -99,7 +115,7 @@ void init_new_pipe_client(IMessageClient* pClient) {
 		[](RPCHandle_t) {
 			pipe_active = true;
 		},
-		[pClient](RPCHandle_t, double, const char*, const char*) {
+		[pClient](RPCHandle_t, int64_t, const char*, const char*) {
 			pClient->Disconnect();
 		}
 	);
@@ -381,7 +397,7 @@ bool capture_should_stop(void)
 		bool alive = true;
 
 		if (cur_time - last_keepalive_check > 5000000000) {
-			alive = capture_alive();
+			alive = is_capture_server_alive();
 			last_keepalive_check = cur_time;
 		}
 
@@ -397,19 +413,19 @@ bool capture_should_init(void)
 	bool should_init = false;
 
 	if (!is_capture_active()) {
-		//if (is_capture_restarted()) {
-			if (capture_alive()) {
+		if (is_capture_restarted()) {
+			if (is_capture_server_alive()) {
 				should_init = true;
 			}
 			else {
 				SIMPLELOG_LOGGER_TRACE(nullptr,
 					"capture_should_init: inactive, restarted, not alive");
 			}
-		//}
-		//else {
-		//	SIMPLELOG_LOGGER_TRACE(nullptr,
-		//		"capture_should_init: inactive, not restarted");
-		//}
+		}
+		else {
+			SIMPLELOG_LOGGER_TRACE(nullptr,
+				"capture_should_init: inactive, not restarted");
+		}
 	}
 
 	return should_init;
@@ -733,6 +749,7 @@ bool capture_init_shtex(shtex_data_t** data, HWND window, uint32_t cx,
 	}
 
 	active = true;
+	set_capture_ready_mutex(true);
 	return true;
 }
 
@@ -788,6 +805,7 @@ void capture_free(void)
 
 	SetEvent(signal_restart);
 	active = false;
+	set_capture_ready_mutex(false);
 }
 
 bool is_overlay_active()

@@ -87,6 +87,9 @@ typedef struct DX9SharedWindowGraphicInfo_t {
 static std::unordered_map<uint64_t,std::shared_ptr<DX9SharedWindowGraphicInfo_t>>  SharedWindowGraphicInfos;
 static void d3d9_free()
 {
+	if (!data.device) {
+		return;
+	}
 	capture_free();
 
 	if (data.using_shtex) {

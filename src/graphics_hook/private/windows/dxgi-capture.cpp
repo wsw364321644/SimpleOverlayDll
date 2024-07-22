@@ -46,45 +46,45 @@ static bool setup_dxgi(IDXGISwapChain *swap)
 	IUnknown *device;
 	HRESULT hr;
 
-	//hr = swap->GetDevice(__uuidof(ID3D11Device), (void **)&device);
-	//if (SUCCEEDED(hr)) {
-	//	ID3D11Device *d3d11 = static_cast<ID3D11Device *>(device);
-	//	D3D_FEATURE_LEVEL level = d3d11->GetFeatureLevel();
-	//	device->Release();
+	hr = swap->GetDevice(__uuidof(ID3D11Device), (void **)&device);
+	if (SUCCEEDED(hr)) {
+		ID3D11Device *d3d11 = static_cast<ID3D11Device *>(device);
+		D3D_FEATURE_LEVEL level = d3d11->GetFeatureLevel();
+		device->Release();
 
-	//	if (level >= D3D_FEATURE_LEVEL_11_0) {
-	//		SIMPLELOG_LOGGER_TRACE(nullptr,"Found D3D11 11.0 device on swap chain");
+		if (level >= D3D_FEATURE_LEVEL_11_0) {
+			SIMPLELOG_LOGGER_TRACE(nullptr,"Found D3D11 11.0 device on swap chain");
 
-	//		data.swap = swap;
-	//		data.capture = d3d11_capture;
-	//		data.free = d3d11_free;
-	//		return true;
-	//	}
-	//}
+			data.swap = swap;
+			data.capture = d3d11_capture;
+			data.free = d3d11_free;
+			return true;
+		}
+	}
 
-	//hr = swap->GetDevice(__uuidof(ID3D10Device), (void **)&device);
-	//if (SUCCEEDED(hr)) {
-	//	device->Release();
+	hr = swap->GetDevice(__uuidof(ID3D10Device), (void **)&device);
+	if (SUCCEEDED(hr)) {
+		device->Release();
 
-	//	SIMPLELOG_LOGGER_TRACE(nullptr,"Found D3D10 device on swap chain");
+		SIMPLELOG_LOGGER_TRACE(nullptr,"Found D3D10 device on swap chain");
 
-	//	data.swap = swap;
-	//	data.capture = d3d10_capture;
-	//	data.free = d3d10_free;
-	//	return true;
-	//}
+		data.swap = swap;
+		data.capture = d3d10_capture;
+		data.free = d3d10_free;
+		return true;
+	}
 
-	//hr = swap->GetDevice(__uuidof(ID3D11Device), (void **)&device);
-	//if (SUCCEEDED(hr)) {
-	//	device->Release();
+	hr = swap->GetDevice(__uuidof(ID3D11Device), (void **)&device);
+	if (SUCCEEDED(hr)) {
+		device->Release();
 
-	//	SIMPLELOG_LOGGER_TRACE(nullptr,"Found D3D11 device on swap chain");
+		SIMPLELOG_LOGGER_TRACE(nullptr,"Found D3D11 device on swap chain");
 
-	//	data.swap = swap;
-	//	data.capture = d3d11_capture;
-	//	data.free = d3d11_free;
-	//	return true;
-	//}
+		data.swap = swap;
+		data.capture = d3d11_capture;
+		data.free = d3d11_free;
+		return true;
+	}
 
 #if COMPILE_D3D12_HOOK
 	hr = swap->GetDevice(__uuidof(ID3D12Device), (void **)&device);

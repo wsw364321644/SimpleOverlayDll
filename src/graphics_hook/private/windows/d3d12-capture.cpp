@@ -173,7 +173,7 @@ static bool d3d12_init_11on12(ID3D12Device *device)
 	bool created = false;
 
 	for (size_t i = 0; i < dxgi_possible_swap_queue_count; ++i) {
-		SIMPLELOG_LOGGER_TRACE(nullptr,"d3d12_init_11on12: creating 11 device: queue=0x%" PRIX64,
+		SIMPLELOG_LOGGER_TRACE(nullptr,"d3d12_init_11on12: creating 11 device: queue={}",
 		     (uint64_t)(uintptr_t)dxgi_possible_swap_queues[i]);
 		IUnknown *const queue = dxgi_possible_swap_queues[i];
 		const HRESULT hr = create_11_on_12(device, 0, nullptr, 0,
@@ -281,7 +281,7 @@ static void d3d12_init(IDXGISwapChain *swap)
 	ID3D12Device *device = nullptr;
 	const HRESULT hr = swap->GetDevice(IID_PPV_ARGS(&device));
 	if (SUCCEEDED(hr)) {
-		SIMPLELOG_LOGGER_TRACE(nullptr,"d3d12_init: device=0x%" PRIX64,
+		SIMPLELOG_LOGGER_TRACE(nullptr,"d3d12_init: device={}",
 		     (uint64_t)(uintptr_t)device);
 
 		HWND window;
@@ -347,9 +347,9 @@ void d3d12_capture(void *swap_ptr, void *)
 	if (capture_should_init()) {
 		d3d12_init(swap);
 	}
-	if (is_capture_ready()) {
-		d3d12_shtex_capture(swap);
-	}
+	//if (is_capture_ready()) {
+	//	d3d12_shtex_capture(swap);
+	//}
 }
 
 static bool try_append_queue_if_unique(ID3D12CommandQueue *queue)

@@ -122,6 +122,8 @@ static inline bool attempt_hook(void)
     //	rehook_gl();*/
     //}
 
+    //todo 
+
     //if (!d3d8_hooked) {
     //	if (!d3d8_hookable()) {
     //		d3d8_hooked = true;
@@ -133,17 +135,17 @@ static inline bool attempt_hook(void)
     //		}
     //	}
     //}
-
-    /*if (!ddraw_hooked) {
-        if (!ddraw_hookable()) {
-            ddraw_hooked = true;
-        } else {
-            ddraw_hooked = hook_ddraw();
-            if (ddraw_hooked) {
-                return true;
-            }
-        }
-    }*/
+    
+    //if (!ddraw_hooked) {
+    //    if (!ddraw_hookable()) {
+    //        ddraw_hooked = true;
+    //    } else {
+    //        ddraw_hooked = hook_ddraw();
+    //        if (ddraw_hooked) {
+    //            return true;
+    //        }
+    //    }
+    //}
     SIMPLELOG_LOGGER_INFO(nullptr, "D3D8={}", d3d8_hooked);
     SIMPLELOG_LOGGER_INFO(nullptr, "D3D9={}", d3d9_hooked);
     SIMPLELOG_LOGGER_INFO(nullptr, "D3D12={}", d3d12_hooked);

@@ -1,5 +1,6 @@
 #include "windows_capture.h"
 #include "game_hook.h"
+#include "input_hook.h"
 #include "overlay_ui.h"
 #include <windows_helper.h>
 #include <LoggerHelper.h>
@@ -91,11 +92,11 @@ LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
     }
     if (is_overlay_active()) {
         OverlayImplWin32WndProcHandler(msg.hwnd, msg.message, msg.wParam, msg.lParam);
-
+        ImeImplWin32WndProcHandler(msg.hwnd, msg.message, msg.wParam, msg.lParam);
         if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST) {
             msg.message = WM_NULL;
         }
-        if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) || (msg.message >= WM_SYSKEYDOWN && msg.message <= WM_SYSDEADCHAR)) {
+        else if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) || (msg.message >= WM_SYSKEYDOWN && msg.message <= WM_SYSDEADCHAR)) {
             msg.message = WM_NULL;
         }
     }

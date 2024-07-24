@@ -6,6 +6,7 @@
 #define  HOTKEYLIST_UPDATE 0x909000
 #define  SHARED_WINDOW_INFOS_UPDATE 0x909001
 #define  OVERLAY_ENABLE 0x909002
+#define  IME_STATE_UPDATE 0x909003
 typedef std::function<bool( LPARAM lParam)> MsgProcessorFn_t;
 typedef struct MsgProcessorHandle_t:CommonHandle_t{
     MsgProcessorHandle_t() :CommonHandle_t() {}
@@ -25,3 +26,4 @@ void async_overlay(WPARAM wParam, LPARAM lParam);
 void tick_async_overlay();
 
 LRESULT OverlayImplWin32WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+LRESULT ImeImplWin32WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);

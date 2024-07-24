@@ -2,7 +2,9 @@
 
 #include "simple_os_defs.h"
 #include "game_hook.h"
+#include "input_hook.h"
 #include <imgui_impl_win32.h>
+#include "windows_capture.h"
 
 ImGuiContext* pImGuiCtx;
 bool show_demo_window{true};
@@ -62,25 +64,55 @@ void overlay_ui_new_frame()
         std::string buttonName = windowName + "button";
         ImGuiWindowFlags flags{ 0 };
         flags |= ImGuiWindowFlags_NoBackground|
-            ImGuiWindowFlags_NoCollapse| ImGuiWindowFlags_NoScrollbar;
+            ImGuiWindowFlags_NoCollapse| ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoSavedSettings;
 
         if (windowType == EHookWindowType::Background) {
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(viewport->Pos);
             ImGui::SetNextWindowSize(viewport->Size);
-            flags |= ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | 
-                ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoBringToFrontOnFocus;
+            flags |= ImGuiWindowFlags_NoDecoration |
+                ImGuiWindowFlags_NoMove |ImGuiWindowFlags_NoBringToFrontOnFocus;
+        }
+        else if (windowType== EHookWindowType::Window) {
+            ImVec2 maxSize{ float(pwinInfo->Info->max_width) ,float(pwinInfo->Info->max_height) };
+            ImVec2 minSize{ float(pwinInfo->Info->min_width) ,float(pwinInfo->Info->min_height) };
+            ImGui::SetNextWindowSizeConstraints(minSize, maxSize);
+            ImVec2 pos{ float(pwinInfo->Info->x) ,float(pwinInfo->Info->y) };
+            ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver| ImGuiCond_Once);
+            ImVec2 size{ float(pwinInfo->Info->render_width) ,float(pwinInfo->Info->render_height) };
+            ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver | ImGuiCond_Once);
         }
         ImGui::Begin(windowName.c_str(),NULL, flags);
-        //ImVec2 CursorScreenPos = ImGui::GetCursorScreenPos();
         
-        //ImVec2 WindowScreenPos(CursorScreenPos.x - CursorPos.x, CursorScreenPos.y - CursorPos.y);
+        ImVec2 winSize = ImGui::GetWindowSize();
+        if (pwinInfo->Info->width != winSize.x || pwinInfo->Info->height != winSize.y) {
+            pwinInfo->Info->width = winSize.x;
+            pwinInfo->Info->height = winSize.y;
+            window_event_t winEvent;
+            winEvent.event = SDL_WindowEventID::SDL_WINDOWEVENT_RESIZED;
+            winEvent.data.win_size.height = pwinInfo->Info->height;
+            winEvent.data.win_size.width = pwinInfo->Info->width;
+            on_window_event(pwinInfo->Id, winEvent);
+        }
+        ImVec2 winPos = ImGui::GetWindowPos();
+        if (pwinInfo->Info->x != winPos.x || pwinInfo->Info->y != winPos.y) {
+            pwinInfo->Info->x = winPos.x;
+            pwinInfo->Info->y = winPos.y;
+            window_event_t winEvent;
+            winEvent.event = SDL_WindowEventID::SDL_WINDOWEVENT_MOVED;
+            winEvent.data.win_move.x = pwinInfo->Info->x;
+            winEvent.data.win_move.y = pwinInfo->Info->y;
+            on_window_event(pwinInfo->Id, winEvent);
+        }
+
+        
 
         ImVec2 WindowScreenPos = ImGui::GetCursorScreenPos();
         int32_t mouseXInWindow = io.MousePos.x - WindowScreenPos.x;
         int32_t mouseYInWindow = io.MousePos.y - WindowScreenPos.y;
 
-        ImGui::InvisibleButton(buttonName.c_str(), ImVec2{(float)pwinInfo->Info->width, (float)pwinInfo->Info->height});
+        ImGui::InvisibleButton(buttonName.c_str(), ImVec2{(float)pwinInfo->Info->render_width, (float)pwinInfo->Info->render_height});
         const ImVec2 p0 = ImGui::GetItemRectMin();
         const ImVec2 p1 = ImGui::GetItemRectMax();
 
@@ -92,8 +124,11 @@ void overlay_ui_new_frame()
         if (ImGui::IsItemFocused()) {
             if (!pwinInfo->bPreFocused) {
                 pwinInfo->bPreFocused = true;
-                on_window_event(pwinInfo->Id, window_event_t{ SDL_WindowEventID::SDL_WINDOWEVENT_ENTER ,
-                    mouse_motion_event_t{mouseXInWindow,mouseYInWindow,0,0} });
+                window_event_t winEvent;
+                winEvent.event = SDL_WindowEventID::SDL_WINDOWEVENT_ENTER;
+                winEvent.data.mouse_motion.x = mouseXInWindow;
+                winEvent.data.mouse_motion.y = mouseYInWindow;
+                on_window_event(pwinInfo->Id, winEvent);
             }
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
                 on_mouse_button_event(pwinInfo->Id, mouse_button_event_t{ EPressedState::Up,EMouseButtonType::Left,1,
@@ -153,7 +188,9 @@ void overlay_ui_new_frame()
         if (!ImGui::IsItemFocused()) {
             if (pwinInfo->bPreFocused) {
                 pwinInfo->bPreFocused = false;
-                on_window_event(pwinInfo->Id, window_event_t{ SDL_WindowEventID::SDL_WINDOWEVENT_LEAVE });
+                window_event_t winEvent;
+                winEvent.event = SDL_WindowEventID::SDL_WINDOWEVENT_LEAVE;
+                on_window_event(pwinInfo->Id, winEvent);
             }
         }
         ImGui::End();
@@ -346,3 +383,5 @@ LRESULT OverlayImplWin32WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARA
     //}
     return ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
 }
+
+

@@ -1,6 +1,7 @@
 #include "graphics_hook.h"
 #include "windows_capture.h"
 #include "game_hook.h"
+#include "input_hook.h"
 #include <LoggerHelper.h>
 #include <TimeRecorder.h>
 #include <sm_util.h>
@@ -229,6 +230,10 @@ BOOL WINAPI DllMain(_In_ HINSTANCE hinstDLL, _In_ DWORD fdwReason, _In_ LPVOID l
         }
 
         if (!init_hook_info()) {
+            return false;
+        }
+
+        if (!init_input_info()) {
             return false;
         }
 

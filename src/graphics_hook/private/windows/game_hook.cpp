@@ -1,10 +1,11 @@
 #include "game_hook.h"
 #include "windows_capture.h"
+#include "input_hook.h"
 
-
+#include <RPC/JrpcHookHelperEvent.h>
+#include <RPC/JrpcHookHelper.h>
 #include <RPC/MessageFactory.h>
-#include "RPC/JrpcHookHelperEvent.h"
-#include "RPC/JrpcHookHelper.h"
+
 
 #include <std_ext.h>
 #include <jrpc_parser.h>
@@ -38,23 +39,14 @@ HINSTANCE dll_inst = NULL;
 volatile bool active = false;
 volatile bool pipe_active = false;
 
-
-static SimpleValueHandle_t HotKeyListHandle;
-static SimpleValueHandle_t SharedWindowInfosHandle;
-static SimpleValueHandle_t OverlayEnableHandle;
-
 static unsigned int shmem_id_counter = 0;
 static CommonHandle_t* shmem_handle = NULL;
 static void* shmem_info = 0;
 
-
-
-HotKeyList_t HotKeyList;
-HotKeyState_t HotKeyState{ &HotKeyList };
-
 static SharedWindowInfos_t HookThreadSharedWindowInfos;
 SharedWindowInfos_t SharedWindowInfos;
-
+static SimpleValueHandle_t SharedWindowInfosHandle;
+static SimpleValueHandle_t OverlayEnableHandle;
 static inline void close_handle(HANDLE* handle)
 {
 	if (*handle) {
@@ -109,7 +101,10 @@ void init_new_pipe_client(IMessageClient* pClient) {
 			SimpleValueStorage::SetValue(HotKeyListHandle, std::move(inHotKeyList));
 		}
 	);
-
+	HookHelperEventInterface->RegisterInputStateUpdate(
+		[](overlay_ime_event_t& imeEvent) {
+			SimpleValueStorage::SetValue(ImeEventHandle, std::move(imeEvent));
+		});
 	auto HookHelperInterface = PRPCProcesser->GetInterface<JRPCHookHelperAPI>();
 	HookHelperInterface->ConnectToHost(GetCurrentProcessId(), GetCommandLineA(), 
 		[](RPCHandle_t) {
@@ -176,22 +171,9 @@ void hook_thread_tick(void) {
 bool init_hook_info(void)
 {
     auto processID = GetCurrentProcessId();
-	HotKeyListHandle = SimpleValueStorage::RegisterValue<HotKeyList_t>();
+	
 	SharedWindowInfosHandle = SimpleValueStorage::RegisterValue<SharedWindowInfos_t>();
-	SimpleValueStorage::RegisterValueChange(HotKeyListHandle,
-		[](SimpleValueHandle_t, const void*, const void*) {
-			async_overlay(HOTKEYLIST_UPDATE,NULL);
-		}
-	);
-	register_overlay_async_processor(HOTKEYLIST_UPDATE,
-		[](LPARAM lParam)->bool {
-			if (!SimpleValueStorage::GetValue(HotKeyListHandle, HotKeyList)) {
-				async_overlay(HOTKEYLIST_UPDATE, NULL);
-			}
-			HotKeyState.ExpectList = &HotKeyList;
-			return true;
-		}
-	);
+	
 	SimpleValueStorage::RegisterValueChange(SharedWindowInfosHandle,
 		[](SimpleValueHandle_t, const void*, const void*) {
 			async_overlay(SHARED_WINDOW_INFOS_UPDATE, NULL);
@@ -457,6 +439,11 @@ bool is_capture_ready(void)
 {
 	return is_capture_active() &&
 		frame_ready(global_hook_info->frame_interval);
+}
+
+bool is_overlay_active()
+{
+	return global_hook_info->bOverlayEnabled;
 }
 
 
@@ -808,51 +795,18 @@ void capture_free(void)
 	set_capture_ready_mutex(false);
 }
 
-bool is_overlay_active()
+RPCProcesser* get_rpc_processer()
 {
-	return global_hook_info->bOverlayEnabled;
+	return PRPCProcesser.get();
 }
 
-void trigger_hotkey(std::string_view name)
+void on_window_event(uint64_t id, window_event_t& e)
 {
-	if (name==OVERLAY_HOT_KEY_NAME) {
-		global_hook_info->bOverlayEnabled= !global_hook_info->bOverlayEnabled;
-	}
-}
-void on_mouse_move_event(uint64_t id, mouse_motion_event_t e) {
-	if (!PRPCProcesser) {
+	if (!get_rpc_processer()) {
 		return;
 	}
-	SIMPLELOG_LOGGER_DEBUG(nullptr, "mouse_motion_event_t: x {} y {} dx {} xy {}", e.x, e.y, e.xrel, e.yrel);
-	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
-	HookHelperEventInterface->OverlayMouseMotionEvent(id, e);
-}
-
-void on_mouse_button_event(uint64_t id,mouse_button_event_t e) {
-	if (!PRPCProcesser) {
-		return;
-	}
-	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
-	HookHelperEventInterface->OverlayMouseButtonEvent(id, e);
-}
-void on_mouse_wheel_event(uint64_t id, mouse_wheel_event_t e) {
-	if (!PRPCProcesser) {
-		return;
-	}
-	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
-	HookHelperEventInterface->OverlayMouseWheelEvent(id, e);
-}
-void on_keyboard_event(uint64_t id, keyboard_event_t e) {
-	if (!PRPCProcesser) {
-		return;
-	}
-	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
-	HookHelperEventInterface->OverlayKeyboardEvent(id, e);
-}
-void on_window_event(uint64_t id, window_event_t e) {
-	if (!PRPCProcesser) {
-		return;
-	}
-	auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
+	auto HookHelperEventInterface = get_rpc_processer()->GetInterface<JRPCHookHelperEventAPI>();
 	HookHelperEventInterface->OverlayWindowEvent(id, e);
 }
+
+

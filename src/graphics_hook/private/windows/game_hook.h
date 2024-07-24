@@ -9,9 +9,6 @@
 #ifndef ALIGN
 #define ALIGN(bytes, align) (((bytes) + ((align)-1)) & ~((align)-1))
 #endif
-typedef struct HotKeyState_t {
-    HotKeyList_t* ExpectList;
-}hot_key_state_t;
 
 typedef struct SharedWindowInfo_t {
     uint64_t Id{ 0 };
@@ -33,9 +30,6 @@ extern HANDLE signal_init;
 extern HWND dummy_window;
 extern HINSTANCE dll_inst;
 
-
-extern HotKeyList_t HotKeyList;
-extern HotKeyState_t HotKeyState;
 extern SharedWindowInfos_t SharedWindowInfos;
 
 static inline void* get_offset_addr(HMODULE module, uint32_t offset)
@@ -87,12 +81,6 @@ void shmem_texture_data_unlock(int idx);
 
 void capture_free(void);
 
+RPCProcesser* get_rpc_processer();
 
-
-void trigger_hotkey(std::string_view name);
-
-void on_mouse_move_event(uint64_t id, mouse_motion_event_t e);
-void on_mouse_button_event(uint64_t id, mouse_button_event_t e);
-void on_mouse_wheel_event(uint64_t id, mouse_wheel_event_t e);
-void on_keyboard_event(uint64_t id, keyboard_event_t e);
-void on_window_event(uint64_t id, window_event_t e);
+void on_window_event(uint64_t id, window_event_t& e);

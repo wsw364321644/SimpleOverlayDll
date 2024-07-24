@@ -954,7 +954,7 @@ static void d3d9_window_update()
 
 		HANDLE copyHandle{NULL};
 		d3d9_patch();
-		hr = data.device->CreateTexture(windowInfo->Info->width, windowInfo->Info->height, 1,
+		hr = data.device->CreateTexture(windowInfo->Info->render_width, windowInfo->Info->render_height, 1,
 			D3DUSAGE_RENDERTARGET, data.d3d9_format, D3DPOOL_DEFAULT, &pinfo->CopyTexDX9, &copyHandle);
 		d3d9_unpatch();
 		if (FAILED(hr)) {

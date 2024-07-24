@@ -671,8 +671,8 @@ static void d3d11_window_update() {
 		}
 		
 		D3D11_TEXTURE2D_DESC desc = {};
-		desc.Width = windowInfo->Info->width;
-		desc.Height = windowInfo->Info->height;
+		desc.Width = windowInfo->Info->render_width;
+		desc.Height = windowInfo->Info->render_height;
 		desc.MipLevels = 1;
 		desc.ArraySize = 1;
 		desc.Format = apply_dxgi_format_typeless(

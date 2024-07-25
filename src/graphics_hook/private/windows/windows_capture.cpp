@@ -19,6 +19,9 @@ typedef BOOL(WINAPI* GetCursorPos_t)(LPPOINT lpPoint);
 typedef BOOL(WINAPI* SetCursorPos_t)(int X, int Y);
 typedef HCURSOR(WINAPI* GetCursor_t)();
 typedef HCURSOR(WINAPI* SetCursor_t)(HCURSOR cursor);
+typedef SHORT(WINAPI* GetKeyState_t)(_In_ int vKey);
+typedef BOOL(WINAPI* PeekMessageA_t)(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+typedef BOOL(WINAPI* PeekMessageW_t)(LPMSG lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
 //UINT GetRawInputData(HRAWINPUT hRawInput, UINT uiCommand, LPVOID pData, PUINT pcbSize, UINT cbSizeHeader);
 //UINT GetRawInputBuffer(PRAWINPUT pData, PUINT pcbSize, UINT cbSizeHeader);
 
@@ -32,13 +35,15 @@ typedef struct windows_data_t {
     SetCursorPos_t RealSetCursorPos{ NULL };
     GetCursor_t RealGetCursor{ NULL };
     SetCursor_t RealSetCursor{ NULL };
+    PeekMessageA_t RealPeekMessageA{ NULL };
+    PeekMessageW_t RealPeekMessageW{ NULL };
     HHOOK hhk{ NULL };
     WNDPROC OriginWndProc{ NULL };
 }windows_data_t;
 
 HWND main_window{NULL};
 uint32_t overlay_async_msg;
-
+bool bInGame{ true };
 static windows_data_t windows_data = {};
 static std::unordered_map<WPARAM,MsgProcessorHandle_t> MsgProcessorList;
 static LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
@@ -74,7 +79,7 @@ static LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
             if (node.HotKey.key_code != keyCode) {
                 continue;
             }
-            if (!WindowsCheckModifier(node.HotKey.mod,windows_data.RealGetKeyState)) {
+            if (!WindowsCheckModifier(node.HotKey.mod)) {
                 break;
             }
             if (std::holds_alternative<std::string>(node.Child)) {
@@ -106,10 +111,15 @@ end_hook:
     return CallNextHookEx(NULL, code, wParam, lParam);
 }
 
+static inline LRESULT CallDefWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
+    auto res= DefWindowProcA(hWnd, Msg, wParam, lParam);
+    bInGame = true;
+    return res;
+}
 static LRESULT CALLBACK HookWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
     //SIMPLELOG_LOGGER_TRACE(ENGINE_LOG_NAME, "Hook receive hwnd {},msg {},l {},w {}", (intptr_t)msg.hwnd, Msg, lParam, wParam);
-
+    bInGame = false;
     if (Msg == overlay_async_msg) {
         auto res = MsgProcessorList.find(wParam);
         if (res != MsgProcessorList.end()) {
@@ -134,7 +144,7 @@ static LRESULT CALLBACK HookWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARA
             if (node.HotKey.key_code != keyCode) {
                 continue;
             }
-            if (!WindowsCheckModifier(node.HotKey.mod, windows_data.RealGetKeyState)) {
+            if (!WindowsCheckModifier(node.HotKey.mod)) {
                 break;
             }
             if (std::holds_alternative<std::string>(node.Child)) {
@@ -155,14 +165,14 @@ static LRESULT CALLBACK HookWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARA
         OverlayImplWin32WndProcHandler(hWnd, Msg, wParam, lParam);
         ImeImplWin32WndProcHandler(hWnd, Msg, wParam, lParam);
         if (Msg >= WM_MOUSEFIRST && Msg <= WM_MOUSELAST) {
-            return 0;
+            return CallDefWindowProc(hWnd, Msg, wParam, lParam);
         }
         else if ((Msg >= WM_KEYFIRST && Msg <= WM_KEYLAST) || (Msg >= WM_SYSKEYDOWN && Msg <= WM_SYSDEADCHAR)) {
-            return 0;
+            return CallDefWindowProc(hWnd, Msg, wParam, lParam);
         }
     }
-   
 end_hook:
+    bInGame = true;
     return CallWindowProcA(windows_data.OriginWndProc, hWnd, Msg, wParam, lParam);
     
 }
@@ -189,7 +199,7 @@ static bool hook_Windows_msg()
 }
 
 static SHORT HookGetAsyncKeyState(_In_ int vKey) {
-    if (is_overlay_active()) {
+    if (is_overlay_active()&& bInGame) {
         return 0;
     }
     else {
@@ -197,7 +207,7 @@ static SHORT HookGetAsyncKeyState(_In_ int vKey) {
     }
 }
 static SHORT HookGetKeyState(_In_ int vKey) {
-    if (is_overlay_active()) {
+    if (is_overlay_active() && bInGame) {
         return 0;
     }
     else {
@@ -205,7 +215,7 @@ static SHORT HookGetKeyState(_In_ int vKey) {
     }
 }
 static BOOL HookGetKeyboardState(__out_ecount(256) PBYTE lpKeyState) {
-    if (is_overlay_active()) {
+    if (is_overlay_active() && bInGame) {
         memset(lpKeyState, 0, 256);
         return TRUE;
     }
@@ -214,7 +224,7 @@ static BOOL HookGetKeyboardState(__out_ecount(256) PBYTE lpKeyState) {
     }
 }
 static INT HookShowCursor(__in BOOL bShow) {
-    if (is_overlay_active()) {
+    if (is_overlay_active() && bInGame) {
         return 0;
     }
     else {
@@ -222,7 +232,7 @@ static INT HookShowCursor(__in BOOL bShow) {
     }
 }
 static BOOL HookGetCursorPos(LPPOINT lpPoint) {
-    if (is_overlay_active()) {
+    if (is_overlay_active() && bInGame) {
         return FALSE;
     }
     else {
@@ -230,7 +240,7 @@ static BOOL HookGetCursorPos(LPPOINT lpPoint) {
     }
 }
 static BOOL HookSetCursorPos(int X, int Y) {
-    if (is_overlay_active()) {
+    if (is_overlay_active() && bInGame) {
         return FALSE;
     }
     else {
@@ -238,7 +248,7 @@ static BOOL HookSetCursorPos(int X, int Y) {
     }
 }
 static HCURSOR HookGetCursor() {
-    if (is_overlay_active()) {
+    if (is_overlay_active() && bInGame) {
         return 0;
     }
     else {
@@ -246,7 +256,7 @@ static HCURSOR HookGetCursor() {
     }
 }
 static HCURSOR HookSetCursor(HCURSOR cursor) {
-    if (is_overlay_active()) {
+    if (is_overlay_active() && bInGame) {
         return 0;
     }
     else {
@@ -254,6 +264,28 @@ static HCURSOR HookSetCursor(HCURSOR cursor) {
     }
 }
 
+static BOOL WINAPI HookPeekMessageA(
+    _Out_ LPMSG lpMsg,
+    _In_opt_ HWND hWnd,
+    _In_ UINT wMsgFilterMin,
+    _In_ UINT wMsgFilterMax,
+    _In_ UINT wRemoveMsg) {
+    bInGame = false;
+    auto res = windows_data.RealPeekMessageA(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
+    bInGame = true;
+    return res;
+}
+static BOOL WINAPI HookPeekMessageW(
+    _Out_ LPMSG lpMsg,
+    _In_opt_ HWND hWnd,
+    _In_ UINT wMsgFilterMin,
+    _In_ UINT wMsgFilterMax,
+    _In_ UINT wRemoveMsg) {
+    bInGame = false;
+    auto res=windows_data.RealPeekMessageW(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
+    bInGame = true;
+    return res;
+}
 static bool hook_Windows_input() {
     if (windows_data.RealGetAsyncKeyState) {
         return true;
@@ -266,7 +298,8 @@ static bool hook_Windows_input() {
     windows_data.RealSetCursorPos = SetCursorPos;
     windows_data.RealGetCursor = GetCursor;
     windows_data.RealSetCursor = SetCursor;
-
+    windows_data.RealPeekMessageA = PeekMessageA;
+    windows_data.RealPeekMessageW = PeekMessageW;
     if (DetourTransactionBegin() != NO_ERROR)
         return false;
     if (DetourAttach((PVOID*)&windows_data.RealGetAsyncKeyState, HookGetAsyncKeyState) != NO_ERROR){
@@ -291,6 +324,12 @@ static bool hook_Windows_input() {
         goto DetourAbort;
     }
     if (DetourAttach((PVOID*)&windows_data.RealSetCursor, HookSetCursor) != NO_ERROR) {
+        goto DetourAbort;
+    }
+    if (DetourAttach((PVOID*)&windows_data.RealPeekMessageA, HookPeekMessageA) != NO_ERROR) {
+        goto DetourAbort;
+    }
+    if (DetourAttach((PVOID*)&windows_data.RealPeekMessageW, HookPeekMessageW) != NO_ERROR) {
         goto DetourAbort;
     }
     if (DetourTransactionCommit() != NO_ERROR) {

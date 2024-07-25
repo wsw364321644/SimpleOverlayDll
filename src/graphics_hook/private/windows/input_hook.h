@@ -23,3 +23,4 @@ void on_mouse_move_event(uint64_t id, mouse_motion_event_t e);
 void on_mouse_button_event(uint64_t id, mouse_button_event_t e);
 void on_mouse_wheel_event(uint64_t id, mouse_wheel_event_t e);
 void on_keyboard_event(uint64_t id, keyboard_event_t e);
+void on_char_event(uint64_t id, overlay_char_event_t& e);

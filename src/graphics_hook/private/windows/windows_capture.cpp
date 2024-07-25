@@ -23,7 +23,7 @@ typedef HCURSOR(WINAPI* SetCursor_t)(HCURSOR cursor);
 //UINT GetRawInputBuffer(PRAWINPUT pData, PUINT pcbSize, UINT cbSizeHeader);
 
 
-typedef struct input_data_t {
+typedef struct windows_data_t {
     GetAsyncKeyState_t RealGetAsyncKeyState{ NULL };
     GetKeyState_t RealGetKeyState{ NULL };
     GetKeyboardState_t RealGetKeyboardState{ NULL };
@@ -33,14 +33,15 @@ typedef struct input_data_t {
     GetCursor_t RealGetCursor{ NULL };
     SetCursor_t RealSetCursor{ NULL };
     HHOOK hhk{ NULL };
-}input_data_t;
+    WNDPROC OriginWndProc{ NULL };
+}windows_data_t;
 
 HWND main_window{NULL};
 uint32_t overlay_async_msg;
 
-static input_data_t input_data = {};
+static windows_data_t windows_data = {};
 static std::unordered_map<WPARAM,MsgProcessorHandle_t> MsgProcessorList;
-LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
+static LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
 {
     MSG& msg = *(PMSG)lParam;
     if (code < 0){
@@ -73,7 +74,7 @@ LRESULT CALLBACK hook_callback(int code, WPARAM wParam, LPARAM lParam)
             if (node.HotKey.key_code != keyCode) {
                 continue;
             }
-            if (!WindowsCheckModifier(node.HotKey.mod,input_data.RealGetKeyState)) {
+            if (!WindowsCheckModifier(node.HotKey.mod,windows_data.RealGetKeyState)) {
                 break;
             }
             if (std::holds_alternative<std::string>(node.Child)) {
@@ -105,21 +106,67 @@ end_hook:
     return CallNextHookEx(NULL, code, wParam, lParam);
 }
 
-//LRESULT CALLBACK mouseProc(int code, WPARAM wParam, LPARAM lParam)
-//{
-//    if (code == HC_ACTION && ((DWORD)lParam & 0x80000000) == 0)	// if there is an incoming action and a key was pressed
-//    {
-//        switch (wParam)
-//        {
-//        case MOUSEEVENTF_MOVE:
-//            SIMPLELOG_LOGGER_TRACE(nullptr, "MOUSEEVENTF_MOVE");
-//            break;
-//        default:
-//            break;
-//        }
-//    }
-//    return CallNextHookEx(mhhk, code, wParam, lParam);
-//}
+static LRESULT CALLBACK HookWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+{
+    //SIMPLELOG_LOGGER_TRACE(ENGINE_LOG_NAME, "Hook receive hwnd {},msg {},l {},w {}", (intptr_t)msg.hwnd, Msg, lParam, wParam);
+
+    if (Msg == overlay_async_msg) {
+        auto res = MsgProcessorList.find(wParam);
+        if (res != MsgProcessorList.end()) {
+            res->second.Fn(lParam);
+        }
+        Msg = WM_NULL;
+        goto end_hook;
+    }
+
+    if (!is_pipe_active()) {
+        goto end_hook;
+    }
+
+    switch (Msg) {
+    case WM_SYSKEYDOWN:
+    case WM_KEYDOWN:
+        SDL_Scancode scanCode = WindowsScanCodeToSDLScanCode(lParam, wParam);
+        SDL_Keycode keyCode = SDL_GetKeyFromScancode(scanCode);
+        auto oldExpectList = HotKeyState.ExpectList;
+        HotKeyList_t& list = *HotKeyState.ExpectList;
+        for (auto node : list) {
+            if (node.HotKey.key_code != keyCode) {
+                continue;
+            }
+            if (!WindowsCheckModifier(node.HotKey.mod, windows_data.RealGetKeyState)) {
+                break;
+            }
+            if (std::holds_alternative<std::string>(node.Child)) {
+                trigger_hotkey(std::get<std::string>(node.Child));
+            }
+            else {
+                HotKeyState.ExpectList = &std::get<HotKeyList_t>(node.Child);
+            }
+
+            break;
+        }
+        if (oldExpectList == HotKeyState.ExpectList) {
+            HotKeyState.ExpectList = &HotKeyList;
+        }
+        break;
+    }
+    if (is_overlay_active()) {
+        OverlayImplWin32WndProcHandler(hWnd, Msg, wParam, lParam);
+        ImeImplWin32WndProcHandler(hWnd, Msg, wParam, lParam);
+        if (Msg >= WM_MOUSEFIRST && Msg <= WM_MOUSELAST) {
+            return 0;
+        }
+        else if ((Msg >= WM_KEYFIRST && Msg <= WM_KEYLAST) || (Msg >= WM_SYSKEYDOWN && Msg <= WM_SYSDEADCHAR)) {
+            return 0;
+        }
+    }
+   
+end_hook:
+    return CallWindowProcA(windows_data.OriginWndProc, hWnd, Msg, wParam, lParam);
+    
+}
+
 static bool hook_Windows_msg()
 {
     if (!main_window) {
@@ -135,8 +182,9 @@ static bool hook_Windows_msg()
     }
     thread_id = ::GetWindowThreadProcessId(main_window, NULL);
 
-    input_data.hhk = SetWindowsHookExA(WH_GETMESSAGE, (HOOKPROC)hook_callback, NULL, thread_id);
-
+    //windows_data.hhk = SetWindowsHookExA(WH_GETMESSAGE, (HOOKPROC)hook_callback, NULL, thread_id);
+    windows_data.OriginWndProc = (WNDPROC)GetWindowLongPtrA(main_window, GWLP_WNDPROC);
+    SetWindowLongPtrA(main_window, GWLP_WNDPROC, (LONG_PTR)HookWindowProc);
     return true;
 }
 
@@ -145,7 +193,7 @@ static SHORT HookGetAsyncKeyState(_In_ int vKey) {
         return 0;
     }
     else {
-        return input_data.RealGetAsyncKeyState(vKey);
+        return windows_data.RealGetAsyncKeyState(vKey);
     }
 }
 static SHORT HookGetKeyState(_In_ int vKey) {
@@ -153,7 +201,7 @@ static SHORT HookGetKeyState(_In_ int vKey) {
         return 0;
     }
     else {
-        return input_data.RealGetKeyState(vKey);
+        return windows_data.RealGetKeyState(vKey);
     }
 }
 static BOOL HookGetKeyboardState(__out_ecount(256) PBYTE lpKeyState) {
@@ -162,7 +210,7 @@ static BOOL HookGetKeyboardState(__out_ecount(256) PBYTE lpKeyState) {
         return TRUE;
     }
     else {
-        return input_data.RealGetKeyboardState(lpKeyState);
+        return windows_data.RealGetKeyboardState(lpKeyState);
     }
 }
 static INT HookShowCursor(__in BOOL bShow) {
@@ -170,7 +218,7 @@ static INT HookShowCursor(__in BOOL bShow) {
         return 0;
     }
     else {
-        return input_data.RealShowCursor(bShow);
+        return windows_data.RealShowCursor(bShow);
     }
 }
 static BOOL HookGetCursorPos(LPPOINT lpPoint) {
@@ -178,7 +226,7 @@ static BOOL HookGetCursorPos(LPPOINT lpPoint) {
         return FALSE;
     }
     else {
-        return input_data.RealGetCursorPos(lpPoint);
+        return windows_data.RealGetCursorPos(lpPoint);
     }
 }
 static BOOL HookSetCursorPos(int X, int Y) {
@@ -186,7 +234,7 @@ static BOOL HookSetCursorPos(int X, int Y) {
         return FALSE;
     }
     else {
-        return input_data.RealSetCursorPos(X,Y);
+        return windows_data.RealSetCursorPos(X,Y);
     }
 }
 static HCURSOR HookGetCursor() {
@@ -194,7 +242,7 @@ static HCURSOR HookGetCursor() {
         return 0;
     }
     else {
-        return input_data.RealGetCursor();
+        return windows_data.RealGetCursor();
     }
 }
 static HCURSOR HookSetCursor(HCURSOR cursor) {
@@ -202,47 +250,47 @@ static HCURSOR HookSetCursor(HCURSOR cursor) {
         return 0;
     }
     else {
-        return input_data.RealSetCursor(cursor);
+        return windows_data.RealSetCursor(cursor);
     }
 }
 
 static bool hook_Windows_input() {
-    if (input_data.RealGetAsyncKeyState) {
+    if (windows_data.RealGetAsyncKeyState) {
         return true;
     }
-    input_data.RealGetAsyncKeyState = GetAsyncKeyState;
-    input_data.RealGetKeyState = GetKeyState;
-    input_data.RealGetKeyboardState = GetKeyboardState;
-    input_data.RealShowCursor = ShowCursor;
-    input_data.RealGetCursorPos = GetCursorPos;
-    input_data.RealSetCursorPos = SetCursorPos;
-    input_data.RealGetCursor = GetCursor;
-    input_data.RealSetCursor = SetCursor;
+    windows_data.RealGetAsyncKeyState = GetAsyncKeyState;
+    windows_data.RealGetKeyState = GetKeyState;
+    windows_data.RealGetKeyboardState = GetKeyboardState;
+    windows_data.RealShowCursor = ShowCursor;
+    windows_data.RealGetCursorPos = GetCursorPos;
+    windows_data.RealSetCursorPos = SetCursorPos;
+    windows_data.RealGetCursor = GetCursor;
+    windows_data.RealSetCursor = SetCursor;
 
     if (DetourTransactionBegin() != NO_ERROR)
         return false;
-    if (DetourAttach((PVOID*)&input_data.RealGetAsyncKeyState, HookGetAsyncKeyState) != NO_ERROR){
+    if (DetourAttach((PVOID*)&windows_data.RealGetAsyncKeyState, HookGetAsyncKeyState) != NO_ERROR){
         goto DetourAbort;
     }
-    if (DetourAttach((PVOID*)&input_data.RealGetKeyState, HookGetKeyState) != NO_ERROR) {
+    if (DetourAttach((PVOID*)&windows_data.RealGetKeyState, HookGetKeyState) != NO_ERROR) {
         goto DetourAbort;
     }
-    if (DetourAttach((PVOID*)&input_data.RealGetKeyboardState, HookGetKeyboardState) != NO_ERROR) {
+    if (DetourAttach((PVOID*)&windows_data.RealGetKeyboardState, HookGetKeyboardState) != NO_ERROR) {
         goto DetourAbort;
     }
-    if (DetourAttach((PVOID*)&input_data.RealShowCursor, HookShowCursor) != NO_ERROR) {
+    if (DetourAttach((PVOID*)&windows_data.RealShowCursor, HookShowCursor) != NO_ERROR) {
         goto DetourAbort;
     }
-    if (DetourAttach((PVOID*)&input_data.RealGetCursorPos, HookGetCursorPos) != NO_ERROR) {
+    if (DetourAttach((PVOID*)&windows_data.RealGetCursorPos, HookGetCursorPos) != NO_ERROR) {
         goto DetourAbort;
     }
-    if (DetourAttach((PVOID*)&input_data.RealSetCursorPos, HookSetCursorPos) != NO_ERROR) {
+    if (DetourAttach((PVOID*)&windows_data.RealSetCursorPos, HookSetCursorPos) != NO_ERROR) {
         goto DetourAbort;
     }
-    if (DetourAttach((PVOID*)&input_data.RealGetCursor, HookGetCursor) != NO_ERROR) {
+    if (DetourAttach((PVOID*)&windows_data.RealGetCursor, HookGetCursor) != NO_ERROR) {
         goto DetourAbort;
     }
-    if (DetourAttach((PVOID*)&input_data.RealSetCursor, HookSetCursor) != NO_ERROR) {
+    if (DetourAttach((PVOID*)&windows_data.RealSetCursor, HookSetCursor) != NO_ERROR) {
         goto DetourAbort;
     }
     if (DetourTransactionCommit() != NO_ERROR) {
@@ -253,14 +301,14 @@ DetourAbort:
     DetourTransactionAbort();
     
 DetourClean:
-    input_data.RealGetAsyncKeyState = nullptr;
-    input_data.RealGetKeyState = nullptr;
-    input_data.RealGetKeyboardState = nullptr;
-    input_data.RealShowCursor = nullptr;
-    input_data.RealGetCursorPos = nullptr;
-    input_data.RealSetCursorPos = nullptr;
-    input_data.RealGetCursor = nullptr;
-    input_data.RealSetCursor = nullptr;
+    windows_data.RealGetAsyncKeyState = nullptr;
+    windows_data.RealGetKeyState = nullptr;
+    windows_data.RealGetKeyboardState = nullptr;
+    windows_data.RealShowCursor = nullptr;
+    windows_data.RealGetCursorPos = nullptr;
+    windows_data.RealSetCursorPos = nullptr;
+    windows_data.RealGetCursor = nullptr;
+    windows_data.RealSetCursor = nullptr;
     return false;
 }
 void set_render_window(HWND in_window)
@@ -297,7 +345,7 @@ void async_overlay(WPARAM wParam, LPARAM lParam) {
 }
 void tick_async_overlay()
 {
-    if (!input_data.hhk) {
+    if (!windows_data.OriginWndProc&&!windows_data.hhk) {
         return;
     }
     while (msgQueue.size() > 0) {

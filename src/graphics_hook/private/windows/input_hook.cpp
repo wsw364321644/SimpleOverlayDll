@@ -96,6 +96,14 @@ void on_keyboard_event(uint64_t id, keyboard_event_t e) {
 	auto HookHelperEventInterface = get_rpc_processer()->GetInterface<JRPCHookHelperEventAPI>();
 	HookHelperEventInterface->OverlayKeyboardEvent(id, e);
 }
+void on_char_event(uint64_t id, overlay_char_event_t& e)
+{
+	if (!get_rpc_processer()) {
+		return;
+	}
+	auto HookHelperEventInterface = get_rpc_processer()->GetInterface<JRPCHookHelperEventAPI>();
+	HookHelperEventInterface->OverlayCharEvent(id, e);
+}
 void on_window_event(uint64_t id, window_event_t e) {
 	if (!get_rpc_processer()) {
 		return;

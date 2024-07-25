@@ -1,11 +1,11 @@
 #include "overlay_ui.h"
-
 #include "simple_os_defs.h"
 #include "game_hook.h"
 #include "input_hook.h"
-#include <imgui_impl_win32.h>
 #include "windows_capture.h"
 
+#include <imgui_impl_win32.h>
+#include <string_convert.h>
 ImGuiContext* pImGuiCtx;
 bool show_demo_window{true};
 bool init_overlay_ui(HWND window) {
@@ -79,9 +79,9 @@ void overlay_ui_new_frame()
             ImVec2 minSize{ float(pwinInfo->Info->min_width) ,float(pwinInfo->Info->min_height) };
             ImGui::SetNextWindowSizeConstraints(minSize, maxSize);
             ImVec2 pos{ float(pwinInfo->Info->x) ,float(pwinInfo->Info->y) };
-            ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver| ImGuiCond_Once);
+            ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
             ImVec2 size{ float(pwinInfo->Info->render_width) ,float(pwinInfo->Info->render_height) };
-            ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver | ImGuiCond_Once);
+            ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
         }
         ImGui::Begin(windowName.c_str(),NULL, flags);
         
@@ -146,12 +146,25 @@ void overlay_ui_new_frame()
                 on_mouse_wheel_event(pwinInfo->Id, mouse_wheel_event_t{ mouseXInWindow,mouseYInWindow,
                      io.MouseWheelH,io.MouseWheel});
             }
-            if (lastMousePos.x != -FLT_MAX && lastMousePos.y != -FLT_MAX || io.MousePos.x != -FLT_MAX && io.MousePos.y != -FLT_MAX) {
-                if (memcmp(&io.MousePos, &lastMousePos,sizeof(ImVec2))!=0) {
+
+            if (memcmp(&io.MousePos, &lastMousePos,sizeof(ImVec2))!=0) {
+                if (lastMousePos.x == -FLT_MAX || lastMousePos.y == -FLT_MAX) {
+                    window_event_t winEvent;
+                    winEvent.event = SDL_WindowEventID::SDL_WINDOWEVENT_ENTER;
+                    winEvent.data.mouse_motion.x = mouseXInWindow;
+                    winEvent.data.mouse_motion.y = mouseYInWindow;
+                    on_window_event(pwinInfo->Id, winEvent);
+                }else if (io.MousePos.x == -FLT_MAX || io.MousePos.y == -FLT_MAX) {
+                    window_event_t winEvent;
+                    winEvent.event = SDL_WindowEventID::SDL_WINDOWEVENT_LEAVE;
+                    on_window_event(pwinInfo->Id, winEvent);
+                }
+                else {
                     on_mouse_move_event(pwinInfo->Id, mouse_motion_event_t{ mouseXInWindow,mouseYInWindow,
-                   (int32_t)(io.MousePos.x- lastMousePos.x), (int32_t)(io.MousePos.y - lastMousePos.y) });
+                    (int32_t)(io.MousePos.x - lastMousePos.x), (int32_t)(io.MousePos.y - lastMousePos.y) });
                 }
             }
+
 
 
 
@@ -166,6 +179,15 @@ void overlay_ui_new_frame()
                     SDL_Keycode keyCode = SDL_GetKeyFromScancode(imgui_key_to_sdl_scancode(key));
                     on_keyboard_event(pwinInfo->Id, keyboard_event_t{ EPressedState::Up,keyCode });
                 }
+            }
+
+            if (io.InputQueueCharacters.Size > 0) {
+                overlay_char_event_t e;
+                auto buf = new uint32_t[io.InputQueueCharacters.Size];
+                auto str=U32ToU8((const char32_t*)io.InputQueueCharacters.begin(), io.InputQueueCharacters.size());
+                e.num = str.size();
+                e.char_buf = str.c_str();
+                on_char_event(pwinInfo->Id,e);
             }
         }
 

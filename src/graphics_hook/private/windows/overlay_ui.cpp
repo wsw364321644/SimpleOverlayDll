@@ -57,6 +57,10 @@ void overlay_ui_new_frame()
     ImGui::ShowDemoWindow(&show_demo_window);
     
     for (auto& pwinInfo : SharedWindowInfos) {
+        if (!pwinInfo->Info->bShow) {
+            continue;
+        }
+
         auto windowType = pwinInfo->Info->hook_window_type;
         
         std::string windowName("window");
@@ -83,8 +87,11 @@ void overlay_ui_new_frame()
             ImVec2 size{ float(pwinInfo->Info->render_width) ,float(pwinInfo->Info->render_height) };
             ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
         }
-        ImGui::Begin(windowName.c_str(),NULL, flags);
-        
+        bool p_open{true};
+        ImGui::Begin(windowName.c_str(), &p_open, flags);
+        if (!p_open) {
+            pwinInfo->Info->bShow = false;
+        }
         ImVec2 winSize = ImGui::GetWindowSize();
         if (pwinInfo->Info->width != winSize.x || pwinInfo->Info->height != winSize.y) {
             pwinInfo->Info->width = winSize.x;

@@ -17,6 +17,8 @@ typedef struct SharedWindowInfo_t {
     bool bPreFocused{false};
     hook_window_info_t* Info{ nullptr };
     RPCHandle_t RemoveHandle;
+    RPCHandle_t TextureUpdateHandle;
+    uint64_t SharedHandleCache;
 }SharedWindowInfo_t;
 typedef std::vector<std::shared_ptr<SharedWindowInfo_t>> SharedWindowInfos_t;
 

@@ -121,20 +121,39 @@ void init_new_pipe_client(IMessageClient* pClient) {
 			return;
 		}
 		auto info = (hook_window_info_t*)MapSharedMemory(shmemHandle);
-		HookThreadSharedWindowInfos.emplace_back(std::make_shared<SharedWindowInfo_t>(SharedWindowInfo_t{ .Id = id,.ShmemHandle= shmemHandle,.Info= info }));
+		
+		HookThreadSharedWindowInfos.emplace_back(std::make_shared<SharedWindowInfo_t>(SharedWindowInfo_t{ .Id = id,.ShmemHandle= shmemHandle,.Info= info ,
+			.SharedHandleCache= info->shared_handle }));
 		SimpleValueStorage::SetValue(SharedWindowInfosHandle, HookThreadSharedWindowInfos);
+		HookHelperInterface->RespondAddWindow(handle);
 		});
+
 	HookHelperInterface->RegisterRemoveWindow([HookHelperInterface](RPCHandle_t handle, uint64_t id) {
 		auto itr=std::find_if(HookThreadSharedWindowInfos.begin(), HookThreadSharedWindowInfos.end(),
 			[id](const std::shared_ptr<SharedWindowInfo_t>& info) {
 				return info->Id == id;
 			});
 		if (itr == HookThreadSharedWindowInfos.end()) {
+			HookHelperInterface->RespondError(handle, -1, "id not exist");
 			return;
 		}
 		(*itr)->RemoveHandle = handle;
 		HookThreadSharedWindowInfos.erase(itr);
 		SimpleValueStorage::SetValue(SharedWindowInfosHandle, HookThreadSharedWindowInfos);
+		});
+
+	HookHelperInterface->RegisterUpdateWindowTexture([HookHelperInterface](RPCHandle_t handle, uint64_t id) {
+		auto itr = std::find_if(HookThreadSharedWindowInfos.begin(), HookThreadSharedWindowInfos.end(),
+			[id](const std::shared_ptr<SharedWindowInfo_t>& info) {
+				return info->Id == id;
+			});
+		if (itr == HookThreadSharedWindowInfos.end()) {
+			HookHelperInterface->RespondError(handle, -1, "id not exist");
+			return;
+		}
+		(*itr)->TextureUpdateHandle = handle;
+		(*itr)->SharedHandleCache = (*itr)->Info->shared_handle;
+		async_overlay(SHARED_WINDOW_TEXTURE_UPDATE, NULL);
 		});
 }
 
@@ -185,17 +204,47 @@ bool init_hook_info(void)
 			if (!SimpleValueStorage::GetValue(SharedWindowInfosHandle, SharedWindowInfos)) {
 				async_overlay(SHARED_WINDOW_INFOS_UPDATE, NULL);
 			}
-			for (auto info: oldSharedWindowInfos) {
+			for (auto oldInfo: oldSharedWindowInfos) {
 				auto itr=std::find_if(SharedWindowInfos.begin(), SharedWindowInfos.end(),
-					[info](std::shared_ptr<SharedWindowInfo_t> newinfo) {
-						return newinfo->Id == info->Id;
+					[oldInfo](std::shared_ptr<SharedWindowInfo_t> newinfo) {
+						return newinfo->Id == oldInfo->Id;
 					});
-				if (itr == SharedWindowInfos.end()&& info->RemoveHandle.IsValid()) {
+				if (itr == SharedWindowInfos.end()&& oldInfo->RemoveHandle.IsValid()) {
+					if (oldInfo->Info->bNT_shared) {
+						if (oldInfo->Info->shared_handle) {
+							CloseHandle(HANDLE(oldInfo->Info->shared_handle));
+						}
+						if (oldInfo->SharedHandleCache && oldInfo->Info->shared_handle != oldInfo->SharedHandleCache) {
+							CloseHandle(HANDLE(oldInfo->SharedHandleCache));
+						}
+					}
 					if (PRPCProcesser) {
 						auto HookHelperInterface = PRPCProcesser->GetInterface<JRPCHookHelperAPI>();
-						HookHelperInterface->RespondRemoveWindow(info->RemoveHandle);
+						HookHelperInterface->RespondRemoveWindow(oldInfo->RemoveHandle);
 					}
+					continue;
 				}
+			}
+
+			return true;
+		}
+	);
+	register_overlay_async_processor(SHARED_WINDOW_TEXTURE_UPDATE,
+		[](LPARAM lParam)->bool {
+			for (auto info : SharedWindowInfos) {
+				if (info->SharedHandleCache == info->Info->shared_handle) {
+					continue;
+				}
+				if (!info->Info->bNT_shared) {
+					continue;
+				}
+				CloseHandle(HANDLE(info->SharedHandleCache));
+				info->SharedHandleCache = info->Info->shared_handle;
+				if (PRPCProcesser) {
+					auto HookHelperInterface = PRPCProcesser->GetInterface<JRPCHookHelperAPI>();
+					HookHelperInterface->RespondUpdateWindowTexture(info->TextureUpdateHandle);
+				}
+				break;
 			}
 
 			return true;

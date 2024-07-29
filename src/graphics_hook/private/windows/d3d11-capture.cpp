@@ -612,11 +612,26 @@ static bool d3d11_init_gui(HWND window) {
 }
 
 typedef struct DX11SharedWindowGraphicInfo_t {
+
+	HANDLE SharedHandle{ NULL };
 	ComPtr<ID3D11Texture2D> WindowTexDX11{ nullptr };
 	ComPtr<ID3D11Texture2D> CopyTexDX11{ nullptr };
 	ComPtr<ID3D11ShaderResourceView> CopySRVDX11{ nullptr };
 	ComPtr<ID3D11Texture2D> TestTexDX11{ nullptr };
-
+	//~DX11SharedWindowGraphicInfo_t() {
+	//	if (CopySRVDX11) {
+	//		CopySRVDX11->Release();
+	//	}
+	//	if (CopyTexDX11) {
+	//		CopyTexDX11->Release();
+	//	}
+	//	if (WindowTexDX11) {
+	//		WindowTexDX11->Release();
+	//	}
+	//	if (TestTexDX11) {
+	//		TestTexDX11->Release();
+	//	}
+	//}
 }DX11SharedWindowGraphicInfo_t;
 static std::unordered_map<uint64_t, std::shared_ptr<DX11SharedWindowGraphicInfo_t>>  SharedWindowGraphicInfos;
 
@@ -641,13 +656,19 @@ static void d3d11_window_update() {
 		HANDLE sharedHandle = (HANDLE)windowInfo->Info->shared_handle;
 		needDel.erase(id);
 		if (SharedWindowGraphicInfos.contains(id)) {
-			continue;
+			if (SharedWindowGraphicInfos[id]->SharedHandle == sharedHandle) {
+				continue;
+			}
+			else {
+				d3d11_remove_window(id);
+			}
 		}
 		auto res = SharedWindowGraphicInfos.emplace(id, std::make_shared<DX11SharedWindowGraphicInfo_t>());
 		if (!res.second) {
 			continue;
 		}
 		auto& pinfo = res.first->second;
+		pinfo->SharedHandle = sharedHandle;
 		if (windowInfo->Info->bNT_shared) {
 			ComPtr<ID3D11Device1> dev;
 			hr = data.device->QueryInterface(IID_PPV_ARGS(&dev));
@@ -660,7 +681,6 @@ static void d3d11_window_update() {
 				d3d11_remove_window(id);
 				continue;
 			}
-
 		}
 		else {
 			hr = data.device->OpenSharedResource(sharedHandle, IID_PPV_ARGS(&(pinfo->WindowTexDX11)));
@@ -700,12 +720,12 @@ static void d3d11_window_update() {
 		windowInfo->WindowTextureID = (intptr_t)pinfo->CopySRVDX11.Get();
 	}
 	for (auto& id : needDel) {
-		SharedWindowGraphicInfos.erase(id);
+		d3d11_remove_window(id);
 	}
 	for (auto& pair : SharedWindowGraphicInfos) {
 		auto& pSharedWindowGraphicInfo = pair.second;
 		ComPtr<IDXGIKeyedMutex>  pDXGIKeyedMutex;
-		hr = pSharedWindowGraphicInfo->WindowTexDX11.As(&pDXGIKeyedMutex);
+		hr = pSharedWindowGraphicInfo->WindowTexDX11->QueryInterface(IID_PPV_ARGS(& pDXGIKeyedMutex));
 		if (FAILED(hr)) {
 			needDel.insert(pair.first);
 			continue;

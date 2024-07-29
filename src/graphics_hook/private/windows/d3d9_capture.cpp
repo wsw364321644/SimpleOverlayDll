@@ -74,6 +74,7 @@ struct d3d9_data {
 
 static struct d3d9_data data = {};
 typedef struct DX9SharedWindowGraphicInfo_t {
+	HANDLE SharedHandle{ NULL };
 	ComPtr<IDirect3DTexture9> CopyTexDX9{ nullptr };
 	ComPtr<IDirect3DSurface9> CopySurfaceDX9{ nullptr };
 	ComPtr<IDirect3DTexture9> WindowTexDX9{ nullptr };
@@ -877,14 +878,19 @@ static void d3d9_window_update()
 		HANDLE sharedHandle = (HANDLE)windowInfo->Info->shared_handle;
 		needDel.erase(id);
 		if (SharedWindowGraphicInfos.contains(id)) {
-			continue;
+			if (SharedWindowGraphicInfos[id]->SharedHandle == sharedHandle) {
+				continue;
+			}
+			else {
+				d3d9_remove_window(id);
+			}
 		}
 		auto res = SharedWindowGraphicInfos.emplace(id, std::make_shared<DX9SharedWindowGraphicInfo_t>());
 		if (!res.second) {
 			continue;
 		}
 		auto& pinfo = res.first->second;
-
+		pinfo->SharedHandle = sharedHandle;
 
 		if (windowInfo->Info->bNT_shared) {
 			ComPtr<ID3D11Device1> dev;

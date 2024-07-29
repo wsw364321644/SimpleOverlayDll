@@ -7,6 +7,7 @@
 #define  SHARED_WINDOW_INFOS_UPDATE 0x909001
 #define  OVERLAY_ENABLE 0x909002
 #define  IME_STATE_UPDATE 0x909003
+#define  SHARED_WINDOW_TEXTURE_UPDATE 0x909004
 typedef std::function<bool( LPARAM lParam)> MsgProcessorFn_t;
 typedef struct MsgProcessorHandle_t:CommonHandle_t{
     MsgProcessorHandle_t() :CommonHandle_t() {}

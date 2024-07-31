@@ -11,8 +11,9 @@ using namespace Microsoft::WRL;
 
 ///// gui pre declare
 static void d3d11_window_update();
-static void dx11_render_draw_data(ImDrawData* draw_data);
+static void d3d11_render_draw_data(ImDrawData* draw_data);
 static bool d3d11_init_gui(HWND window);
+static void d3d11_free_gui();
 
 struct d3d11_data {
 	ID3D11Device* device;         /* do not release */
@@ -135,6 +136,7 @@ void d3d11_free(void)
 
 	memset(&data, 0, sizeof(data));
 
+	d3d11_free_gui();
 	capture_free();
 
 	SIMPLELOG_LOGGER_DEBUG(nullptr,"----------------- d3d11 capture freed ----------------");
@@ -413,7 +415,7 @@ void d3d11_capture(void* swap_ptr, void* backbuffer_ptr)
 		d3d11_window_update();
 		if (is_overlay_active()) {
 			overlay_ui_new_frame();
-			dx11_render_draw_data(overlay_ui_render());
+			d3d11_render_draw_data(overlay_ui_render());
 		}
 	}
 }
@@ -778,7 +780,7 @@ static void dx11_setup_render_state(ImDrawData* draw_data, ID3D11DeviceContext* 
 	ctx->RSSetState(data.pRasterizerState);
 }
 
-static void dx11_render_draw_data(ImDrawData* draw_data) {
+static void d3d11_render_draw_data(ImDrawData* draw_data) {
 	// Avoid rendering when minimized
 	if (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)
 		return;
@@ -965,3 +967,6 @@ static void dx11_render_draw_data(ImDrawData* draw_data) {
 	ctx->IASetInputLayout(old.InputLayout); if (old.InputLayout) old.InputLayout->Release();
 }
 
+static void d3d11_free_gui() {
+	SharedWindowGraphicInfos.clear();
+}

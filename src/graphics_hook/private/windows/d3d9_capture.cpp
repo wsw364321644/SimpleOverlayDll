@@ -73,6 +73,12 @@ struct d3d9_data {
 };
 
 static struct d3d9_data data = {};
+
+///// gui pre declare
+static void d3d9_window_update();
+static void d3d9_render_draw_data(ImDrawData* draw_data);
+static bool d3d9_init_gui(HWND window);
+static void d3d9_free_gui();
 typedef struct DX9SharedWindowGraphicInfo_t {
 	HANDLE SharedHandle{ NULL };
 	ComPtr<IDirect3DTexture9> CopyTexDX9{ nullptr };
@@ -86,12 +92,13 @@ typedef struct DX9SharedWindowGraphicInfo_t {
 
 }DX9SharedWindowGraphicInfo_t;
 static std::unordered_map<uint64_t,std::shared_ptr<DX9SharedWindowGraphicInfo_t>>  SharedWindowGraphicInfos;
+
 static void d3d9_free()
 {
 	if (!data.device) {
 		return;
 	}
-	capture_free();
+	
 
 	if (data.using_shtex) {
 		if (data.d3d11_tex)
@@ -125,8 +132,9 @@ static void d3d9_free()
 		data.pIB->Release();
 	}
 	memset(&data, 0, sizeof(data));
+	d3d9_free_gui();
+	capture_free();
 
-	SharedWindowGraphicInfos.clear();
 }
 
 static DXGI_FORMAT d3d9_to_dxgi_format(D3DFORMAT format)
@@ -215,7 +223,7 @@ font_clean:
 	}
 	return result;
 }
-static void d3d9_init_overlay(HWND new_window) {
+static bool d3d9_init_gui(HWND new_window) {
 	if (main_window != new_window) {
 		if (main_window) {
 			destroy_overlay_ui();
@@ -225,6 +233,7 @@ static void d3d9_init_overlay(HWND new_window) {
 	set_render_window(new_window);
 
 	create_fonts_texture();
+	return true;
 }
 
 static void setup_render_state(ImDrawData* draw_data) {
@@ -292,7 +301,7 @@ static void setup_render_state(ImDrawData* draw_data) {
 		data.device->SetTransform(D3DTS_PROJECTION, &mat_projection);
 	}
 }
-static void dx9_render_draw_data(ImDrawData* draw_data) {
+static void d3d9_render_draw_data(ImDrawData* draw_data) {
 	// Avoid rendering when minimized
 	if (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)
 		return;
@@ -841,7 +850,7 @@ static void d3d9_init(IDirect3DDevice9* device)
 			return;
 		}
 	}
-	d3d9_init_overlay(window);
+	d3d9_init_gui(window);
 
 	if (global_hook_info->force_shmem ||
 		(!d3d9ex && data.patch == -1 && !has_d3d9ex_bool_offset)) {
@@ -1152,7 +1161,7 @@ static void d3d9_capture(IDirect3DDevice9* device,
 		if (is_overlay_active()) {
 			overlay_ui_new_frame();
 			data.device->BeginScene();
-			dx9_render_draw_data(overlay_ui_render());
+			d3d9_render_draw_data(overlay_ui_render());
 			data.device->EndScene();
 		}
 	}
@@ -1472,3 +1481,9 @@ bool hook_d3d9(void)
 	return success;
 }
 
+
+
+
+void d3d9_free_gui() {
+	SharedWindowGraphicInfos.clear();
+}

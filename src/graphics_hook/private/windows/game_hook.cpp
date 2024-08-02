@@ -152,7 +152,7 @@ void init_new_pipe_client(IMessageClient* pClient) {
 			return;
 		}
 		(*itr)->TextureUpdateHandle = handle;
-		(*itr)->SharedHandleCache = (*itr)->Info->shared_handle;
+		//(*itr)->SharedHandleCache = (*itr)->Info->shared_handle;
 		async_overlay(SHARED_WINDOW_TEXTURE_UPDATE, NULL);
 		});
 }

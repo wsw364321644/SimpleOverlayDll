@@ -53,6 +53,7 @@ typedef struct d3d12_data_t {
 		struct {
 			shtex_data_t *shtex_info;
 			ID3D11Resource *backbuffer11[MAX_BACKBUFFERS];
+			ID3D11RenderTargetView* backbufferRTV[MAX_BACKBUFFERS];
 			UINT backbuffer_count;
 			UINT cur_backbuffer;
 			ID3D11Texture2D *copy_tex;
@@ -64,7 +65,7 @@ static d3d12_data_t data = {};
 
 ///// gui pre declare
 static void d3d12_window_update();
-static void d3d12_render_draw_data(ImDrawData* draw_data);
+static void d3d12_render_draw_data(IDXGISwapChain* swap,ImDrawData* draw_data);
 static bool d3d12_init_gui(HWND window);
 static void d3d12_free_gui();
 static int const                    NUM_FRAMES_IN_FLIGHT = 3;
@@ -82,7 +83,32 @@ void d3d12_free(void)
 	for (size_t i = 0; i < data.backbuffer_count; i++) {
 		if (data.backbuffer11[i])
 			data.backbuffer11[i]->Release();
+		if (data.backbufferRTV[i])
+			data.backbufferRTV[i]->Release();
 	}
+	if (data.pVertexConstantBuffer)
+		data.pVertexConstantBuffer->Release();
+	if (data.pVB)
+		data.pVB->Release();
+	if (data.pIB)
+		data.pIB->Release();
+	if (data.pInputLayout)
+		data.pInputLayout->Release();
+	if (data.pPixelShader)
+		data.pPixelShader->Release();
+	if (data.pVertexShader)
+		data.pVertexShader->Release();
+	if (data.pFontSampler)
+		data.pFontSampler->Release();
+	if (data.pFontTextureView)
+		data.pFontTextureView->Release();
+	if (data.pRasterizerState)
+		data.pRasterizerState->Release();
+	if (data.pBlendState)
+		data.pBlendState->Release();
+	if (data.pDepthStencilState)
+		data.pDepthStencilState->Release();
+
 	if (data.device11)
 		data.device11->Release();
 	if (data.context11)
@@ -105,7 +131,7 @@ struct bb_info {
 
 static bool create_d3d12_tex(bb_info &bb)
 {
-	D3D11_RESOURCE_FLAGS rf11 = {};
+	D3D11_RESOURCE_FLAGS rf11 = { D3D11_BIND_RENDER_TARGET };
 	HRESULT hr;
 
 	if (!bb.count)
@@ -116,10 +142,16 @@ static bool create_d3d12_tex(bb_info &bb)
 	for (UINT i = 0; i < bb.count; i++) {
 		hr = data.device11on12->CreateWrappedResource(
 			bb.backbuffer[i], &rf11, D3D12_RESOURCE_STATE_PRESENT,
-			D3D12_RESOURCE_STATE_PRESENT,
+			D3D12_RESOURCE_STATE_PRESENT | D3D12_RESOURCE_STATE_RENDER_TARGET,
 			IID_PPV_ARGS(&data.backbuffer11[i]));
 		if (FAILED(hr)) {
 			SIMPLELOG_LOGGER_ERROR(nullptr,"create_d3d12_tex: failed to create backbuffer11 {}",
+				hr);
+			return false;
+		}
+		hr = data.device11->CreateRenderTargetView(data.backbuffer11[i], NULL, &data.backbufferRTV[i]);
+		if (FAILED(hr)) {
+			SIMPLELOG_LOGGER_ERROR(nullptr, "create_d3d12_tex: failed to create backbufferRTV {}",
 				hr);
 			return false;
 		}
@@ -198,7 +230,7 @@ static bool d3d12_init_11on12(ID3D12Device *device)
 	bool created = false;
 
 	for (size_t i = 0; i < dxgi_possible_swap_queue_count; ++i) {
-		SIMPLELOG_LOGGER_TRACE(nullptr,"d3d12_init_11on12: creating 11 device: queue={}",
+		SIMPLELOG_LOGGER_DEBUG(nullptr,"d3d12_init_11on12: creating 11 device: queue={}",
 		     (uint64_t)(uintptr_t)dxgi_possible_swap_queues[i]);
 		auto desc=dxgi_possible_swap_queues[i]->GetDesc();
 		if (desc.Type != D3D12_COMMAND_LIST_TYPE::D3D12_COMMAND_LIST_TYPE_DIRECT) {
@@ -320,8 +352,10 @@ static void d3d12_init(IDXGISwapChain *swap)
 				     "unsupported; ignoring");
 			}
 
-			if (!d3d12_shtex_init(data.device, window, bb))
+			if (!d3d12_shtex_init(data.device, window, bb)) {
 				d3d12_free();
+				return;
+			}
 
 			d3d12_init_gui(window);
 		}
@@ -380,11 +414,12 @@ void d3d12_capture(void *swap_ptr, void *)
 	//if (is_capture_ready()) {
 	//	d3d12_shtex_capture(swap);
 	//}
+
 	if (is_capture_active()) {
 		d3d12_window_update();
 		if (is_overlay_active()) {
 			overlay_ui_new_frame();
-			d3d12_render_draw_data(overlay_ui_render());
+			d3d12_render_draw_data(swap,overlay_ui_render());
 		}
 	}
 }
@@ -857,9 +892,26 @@ static void d3d12_setup_render_state(ImDrawData* draw_data, ID3D11DeviceContext*
 	ctx->OMSetBlendState(data.pBlendState, blend_factor, 0xffffffff);
 	ctx->OMSetDepthStencilState(data.pDepthStencilState, 0);
 	ctx->RSSetState(data.pRasterizerState);
+	ctx->OMSetRenderTargets(1, &data.backbufferRTV[data.cur_backbuffer], nullptr);
 }
 
-static void d3d12_render_draw_data(ImDrawData* draw_data) {
+static void d3d12_render_draw_data(IDXGISwapChain* swap, ImDrawData* draw_data) {
+
+	bool dxgi_1_4 = data.dxgi_1_4;
+	UINT cur_idx;
+	if (dxgi_1_4) {
+		IDXGISwapChain3* swap3 =
+			reinterpret_cast<IDXGISwapChain3*>(swap);
+		cur_idx = swap3->GetCurrentBackBufferIndex();
+		data.cur_backbuffer = cur_idx;
+	}
+	else {
+		cur_idx = data.cur_backbuffer;
+	}
+	ID3D11Resource* backbuffer = data.backbuffer11[cur_idx];
+	data.device11on12->AcquireWrappedResources(&backbuffer, 1);
+
+
 	// Avoid rendering when minimized
 	if (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f)
 		return;
@@ -960,6 +1012,8 @@ static void d3d12_render_draw_data(ImDrawData* draw_data) {
 		UINT                        IndexBufferOffset, VertexBufferStride, VertexBufferOffset;
 		DXGI_FORMAT                 IndexBufferFormat;
 		ID3D11InputLayout* InputLayout;
+		ID3D11RenderTargetView* RenderTarget;
+		ID3D11DepthStencilView* DepthStencil;
 	};
 	BACKUP_DX11_STATE old = {};
 	old.ScissorRectsCount = old.ViewportsCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
@@ -968,6 +1022,7 @@ static void d3d12_render_draw_data(ImDrawData* draw_data) {
 	ctx->RSGetState(&old.RS);
 	ctx->OMGetBlendState(&old.BlendState, old.BlendFactor, &old.SampleMask);
 	ctx->OMGetDepthStencilState(&old.DepthStencilState, &old.StencilRef);
+	ctx->OMGetRenderTargets(1, &old.RenderTarget, &old.DepthStencil);
 	ctx->PSGetShaderResources(0, 1, &old.PSShaderResource);
 	ctx->PSGetSamplers(0, 1, &old.PSSampler);
 	old.PSInstancesCount = old.VSInstancesCount = old.GSInstancesCount = 256;
@@ -1032,6 +1087,7 @@ static void d3d12_render_draw_data(ImDrawData* draw_data) {
 	ctx->RSSetState(old.RS); if (old.RS) old.RS->Release();
 	ctx->OMSetBlendState(old.BlendState, old.BlendFactor, old.SampleMask); if (old.BlendState) old.BlendState->Release();
 	ctx->OMSetDepthStencilState(old.DepthStencilState, old.StencilRef); if (old.DepthStencilState) old.DepthStencilState->Release();
+	ctx->OMSetRenderTargets(1,&old.RenderTarget, old.DepthStencil); if (old.RenderTarget) old.RenderTarget->Release(); if (old.DepthStencil) old.DepthStencil->Release();
 	ctx->PSSetShaderResources(0, 1, &old.PSShaderResource); if (old.PSShaderResource) old.PSShaderResource->Release();
 	ctx->PSSetSamplers(0, 1, &old.PSSampler); if (old.PSSampler) old.PSSampler->Release();
 	ctx->PSSetShader(old.PS, old.PSInstances, old.PSInstancesCount); if (old.PS) old.PS->Release();
@@ -1044,6 +1100,14 @@ static void d3d12_render_draw_data(ImDrawData* draw_data) {
 	ctx->IASetIndexBuffer(old.IndexBuffer, old.IndexBufferFormat, old.IndexBufferOffset); if (old.IndexBuffer) old.IndexBuffer->Release();
 	ctx->IASetVertexBuffers(0, 1, &old.VertexBuffer, &old.VertexBufferStride, &old.VertexBufferOffset); if (old.VertexBuffer) old.VertexBuffer->Release();
 	ctx->IASetInputLayout(old.InputLayout); if (old.InputLayout) old.InputLayout->Release();
+
+	data.device11on12->ReleaseWrappedResources(&backbuffer, 1);
+	data.context11->Flush();
+
+	if (!dxgi_1_4) {
+		if (++data.cur_backbuffer >= data.backbuffer_count)
+			data.cur_backbuffer = 0;
+	}
 }
 
 static void d3d12_free_gui() {

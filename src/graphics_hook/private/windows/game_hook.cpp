@@ -13,6 +13,7 @@
 #include <LoggerHelper.h>
 #include <HOOK/hook_synchronized.h>
 #include <windows_helper.h>
+#include <psapi.h>
 #include <simple_time.h>
 #include <string>
 #include <cinttypes>
@@ -38,6 +39,7 @@ HWND dummy_window = NULL;
 HINSTANCE dll_inst = NULL;
 volatile bool active = false;
 volatile bool pipe_active = false;
+char process_name[MAX_PATH] = { 0 };
 
 static unsigned int shmem_id_counter = 0;
 static CommonHandle_t* shmem_handle = NULL;
@@ -191,6 +193,8 @@ bool init_hook_info(void)
 {
     auto processID = GetCurrentProcessId();
 	
+	get_process_file_base_name_by_handle(GetCurrentProcess(), NULL, process_name, MAX_PATH);
+
 	SharedWindowInfosHandle = SimpleValueStorage::RegisterValue<SharedWindowInfos_t>();
 	
 	SimpleValueStorage::RegisterValueChange(SharedWindowInfosHandle,

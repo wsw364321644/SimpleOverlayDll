@@ -31,7 +31,7 @@ extern HANDLE signal_exit;
 extern HANDLE signal_init;
 extern HWND dummy_window;
 extern HINSTANCE dll_inst;
-
+extern char process_name[MAX_PATH];
 extern SharedWindowInfos_t SharedWindowInfos;
 
 static inline void* get_offset_addr(HMODULE module, uint32_t offset)

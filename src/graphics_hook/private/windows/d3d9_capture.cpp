@@ -80,6 +80,7 @@ static void d3d9_render_draw_data(ImDrawData* draw_data);
 static bool d3d9_init_gui(HWND window);
 static void d3d9_free_gui();
 typedef struct DX9SharedWindowGraphicInfo_t {
+	bool bNT_shared;
 	HANDLE SharedHandle{ NULL };
 	ComPtr<IDirect3DTexture9> CopyTexDX9{ nullptr };
 	ComPtr<IDirect3DSurface9> CopySurfaceDX9{ nullptr };
@@ -900,8 +901,8 @@ static void d3d9_window_update()
 		}
 		auto& pinfo = res.first->second;
 		pinfo->SharedHandle = sharedHandle;
-
-		if (windowInfo->Info->bNT_shared) {
+		pinfo->bNT_shared = windowInfo->Info->bNT_shared;
+		if (pinfo->bNT_shared) {
 			ComPtr<ID3D11Device1> dev;
 			hr = data.d3d11_device->QueryInterface(IID_PPV_ARGS(&dev));
 			if (FAILED(hr)) {
@@ -1015,17 +1016,21 @@ static void d3d9_window_update()
 	for (auto& pair : SharedWindowGraphicInfos) {
 		auto& pSharedWindowGraphicInfo=pair.second;
 		ComPtr<IDXGIKeyedMutex>  pDXGIKeyedMutex;
-		hr = pSharedWindowGraphicInfo->WindowTexDX11.As(&pDXGIKeyedMutex);
-		if (FAILED(hr)) {
-			needDel.insert(pair.first);
-			continue;
-		}
-		hr = pDXGIKeyedMutex->AcquireSync(1, 0);
-		if (hr != WAIT_OBJECT_0) {
-			continue;
+		if (pSharedWindowGraphicInfo->bNT_shared) {
+			hr = pSharedWindowGraphicInfo->WindowTexDX11.As(&pDXGIKeyedMutex);
+			if (FAILED(hr)) {
+				needDel.insert(pair.first);
+				continue;
+			}
+			hr = pDXGIKeyedMutex->AcquireSync(1, 0);
+			if (hr != WAIT_OBJECT_0) {
+				continue;
+			}
 		}
 		data.d3d11_context->CopyResource(pSharedWindowGraphicInfo->CopyTexDX11.Get(), pSharedWindowGraphicInfo->WindowTexDX11.Get());
-		pDXGIKeyedMutex->ReleaseSync(0);
+		if (pSharedWindowGraphicInfo->bNT_shared) {
+			pDXGIKeyedMutex->ReleaseSync(0);
+		}
 		
 		//test code check data in dx9 texture
 		//hr = data.device->GetRenderTargetData(pSharedWindowGraphicInfo->CopySurfaceDX9.Get(), pSharedWindowGraphicInfo->TempSurfaceDX9.Get());

@@ -614,7 +614,7 @@ static bool d3d11_init_gui(HWND window) {
 }
 
 typedef struct DX11SharedWindowGraphicInfo_t {
-
+	bool bNT_shared;
 	HANDLE SharedHandle{ NULL };
 	ComPtr<ID3D11Texture2D> WindowTexDX11{ nullptr };
 	ComPtr<ID3D11Texture2D> CopyTexDX11{ nullptr };
@@ -671,7 +671,8 @@ static void d3d11_window_update() {
 		}
 		auto& pinfo = res.first->second;
 		pinfo->SharedHandle = sharedHandle;
-		if (windowInfo->Info->bNT_shared) {
+		pinfo->bNT_shared = windowInfo->Info->bNT_shared;
+		if (pinfo->bNT_shared) {
 			ComPtr<ID3D11Device1> dev;
 			hr = data.device->QueryInterface(IID_PPV_ARGS(&dev));
 			if (FAILED(hr)) {
@@ -727,17 +728,21 @@ static void d3d11_window_update() {
 	for (auto& pair : SharedWindowGraphicInfos) {
 		auto& pSharedWindowGraphicInfo = pair.second;
 		ComPtr<IDXGIKeyedMutex>  pDXGIKeyedMutex;
-		hr = pSharedWindowGraphicInfo->WindowTexDX11->QueryInterface(IID_PPV_ARGS(& pDXGIKeyedMutex));
-		if (FAILED(hr)) {
-			needDel.insert(pair.first);
-			continue;
-		}
-		hr = pDXGIKeyedMutex->AcquireSync(1, 0);
-		if (hr != WAIT_OBJECT_0) {
-			continue;
+		if (pSharedWindowGraphicInfo->bNT_shared) {
+			hr = pSharedWindowGraphicInfo->WindowTexDX11->QueryInterface(IID_PPV_ARGS(&pDXGIKeyedMutex));
+			if (FAILED(hr)) {
+				needDel.insert(pair.first);
+				continue;
+			}
+			hr = pDXGIKeyedMutex->AcquireSync(1, 0);
+			if (hr != WAIT_OBJECT_0) {
+				continue;
+			}
 		}
 		data.context->CopyResource(pSharedWindowGraphicInfo->CopyTexDX11.Get(), pSharedWindowGraphicInfo->WindowTexDX11.Get());
-		pDXGIKeyedMutex->ReleaseSync(0);
+		if (pSharedWindowGraphicInfo->bNT_shared) {
+			pDXGIKeyedMutex->ReleaseSync(0);
+		}
 	}
 	for (auto& id : needDel) {
 		SharedWindowGraphicInfos.erase(id);

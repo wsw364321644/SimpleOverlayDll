@@ -406,10 +406,51 @@ SDL_Scancode imgui_key_to_sdl_scancode(ImGuiKey key)
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT OverlayImplWin32WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
-    //switch (msg) {
-    //case WM_MOUSEMOVE:
-    //case WM_KEYDOWN:
-    //}
+    switch (msg) {
+    case WM_IME_CHAR: {
+        auto& io = ImGui::GetIO();
+        if (::IsWindowUnicode(hWnd))
+        {
+            // You can also use ToAscii()+GetKeyboardState() to retrieve characters.
+            if (wParam > 0 && wParam < 0x10000)
+                io.AddInputCharacterUTF16((unsigned short)wParam);
+        }
+        else
+        {
+            uint32_t KeyboardCodePage;
+            HKL keyboard_layout = ::GetKeyboardLayout(0);
+            LCID keyboard_lcid = MAKELCID(HIWORD(keyboard_layout), SORT_DEFAULT);
+            if (::GetLocaleInfoA(keyboard_lcid, (LOCALE_RETURN_NUMBER | LOCALE_IDEFAULTANSICODEPAGE), (LPSTR)&KeyboardCodePage, sizeof(KeyboardCodePage)) == 0)
+                KeyboardCodePage = CP_ACP;
+            DWORD wChar = wParam;
+            if (wChar <= 127)
+            {
+                io.AddInputCharacter(wChar);
+            }
+            else
+            {
+                // swap lower and upper part.
+                BYTE low = (BYTE)(wChar & 0x00FF);
+                BYTE high = (BYTE)((wChar & 0xFF00) >> 8);
+                wChar = MAKEWORD(high, low);
+                wchar_t ch[6];
+                auto len=MultiByteToWideChar(KeyboardCodePage, 0, (LPCSTR)&wChar, 2, ch, 1);
+                if (len > 0) {
+                    for (auto i = 0; i < len; i++) {
+                        io.AddInputCharacterUTF16(ch[i]);
+                    }
+                }
+            }
+        }
+
+        return 0;
+        break;
+    }
+    case WM_CHAR: {
+        return 0;
+        break;
+    }
+    }
     return ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
 }
 

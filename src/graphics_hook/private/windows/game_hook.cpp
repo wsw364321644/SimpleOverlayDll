@@ -64,9 +64,7 @@ static inline bool set_capture_ready_mutex(bool bready)
     static bool inited{ false };
     std::error_code ec;
     if (bready) {
-        char nameBuf[64] = { 0 };
-        std::snprintf(nameBuf, 64, "%s%lu", WINDOW_HOOK_KEEPALIVE, GetCurrentProcessId());
-        ready_mutex = utilpp::CreateProcMutex(nameBuf, ec);
+        ready_mutex = utilpp::CreateProcMutex(GetNamePlusID(WINDOW_HOOK_KEEPALIVE, GetCurrentProcessId()), ec);
         success = ready_mutex.IsValid();
     }
     else {
@@ -298,14 +296,11 @@ bool init_mutexes(void)
 {
     std::error_code ec;
     DWORD pid = GetCurrentProcessId();
-    char nameBuf[64] = { 0 };
-    std::snprintf(nameBuf, 64, "%s%lu", MUTEX_TEXTURE1, pid);
-    tex_mutexes[0] = utilpp::CreateProcMutex(nameBuf, ec);
+    tex_mutexes[0] = utilpp::CreateProcMutex(GetNamePlusID(MUTEX_TEXTURE1, pid), ec);
     if (!tex_mutexes[0]) {
         return false;
     }
-    std::snprintf(nameBuf, 64, "%s%lu", MUTEX_TEXTURE2, pid);
-    tex_mutexes[1] = utilpp::CreateProcMutex(nameBuf, ec);
+    tex_mutexes[1] = utilpp::CreateProcMutex(GetNamePlusID(MUTEX_TEXTURE2, pid), ec);
     if (!tex_mutexes[1]) {
         return false;
     }
@@ -325,34 +320,23 @@ bool init_signals(void)
 {
     std::error_code ec;
     DWORD pid = GetCurrentProcessId();
-    char nameBuf[64] = { 0 };
-
-    std::snprintf(nameBuf, 64, "%s%lu", EVENT_CAPTURE_RESTART, pid);
-    signal_restart = utilpp::CreateProcEvent(nameBuf,ec);
+    signal_restart = utilpp::CreateProcEvent(GetNamePlusID(EVENT_CAPTURE_RESTART, pid), ec);
     if (!signal_restart) {
         return false;
     }
-
-    std::snprintf(nameBuf, 64, "%s%lu", EVENT_CAPTURE_STOP, pid);
-    signal_stop = utilpp::CreateProcEvent(nameBuf, ec);
+    signal_stop = utilpp::CreateProcEvent(GetNamePlusID(EVENT_CAPTURE_STOP, pid), ec);
     if (!signal_stop) {
         return false;
     }
-
-    std::snprintf(nameBuf, 64, "%s%lu", EVENT_HOOK_READY, pid);
-    signal_ready = utilpp::CreateProcEvent(nameBuf, ec);
+    signal_ready = utilpp::CreateProcEvent(GetNamePlusID(EVENT_HOOK_READY, pid), ec);
     if (!signal_ready) {
         return false;
     }
-
-    std::snprintf(nameBuf, 64, "%s%lu", EVENT_HOOK_EXIT, pid);
-    signal_exit = utilpp::CreateProcEvent(nameBuf, ec);
+    signal_exit = utilpp::CreateProcEvent(GetNamePlusID(EVENT_HOOK_EXIT, pid), ec);
     if (!signal_exit) {
         return false;
     }
-
-    std::snprintf(nameBuf, 64, "%s%lu", EVENT_HOOK_INIT, pid);
-    signal_init = utilpp::CreateProcEvent(nameBuf, ec);
+    signal_init = utilpp::CreateProcEvent(GetNamePlusID(EVENT_HOOK_INIT, pid), ec);
     if (!signal_init) {
         return false;
     }
@@ -540,7 +524,7 @@ static thread_data_t thread_data = { 0 };
 
 static inline bool init_shared_info(size_t size, HWND window)
 {
-    char name[64];
+    char name[64]{ 0 };
     HWND top = GetAncestor(window, GA_ROOT);
 
     std::snprintf(name, 64, SHMEM_TEXTURE "_%" PRIu64 "_%u",

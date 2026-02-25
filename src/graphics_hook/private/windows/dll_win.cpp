@@ -23,8 +23,7 @@ static std::atomic_bool stop_loop{ false };
 static bool init_dll(void) {
     std::error_code ec;
     DWORD pid = GetCurrentProcessId();
-    char new_name[64]{ 0 };
-    std::snprintf(new_name, 64, "%s%lu", "graphics_hook", pid);
+    auto new_name = GetNamePlusID("graphics_hook", pid);
     auto h = utilpp::OpenProcMutex(new_name,ec);
     if (h) {
         utilpp::CloseProcMutex(h, ec);

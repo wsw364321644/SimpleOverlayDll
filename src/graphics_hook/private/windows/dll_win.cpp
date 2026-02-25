@@ -4,6 +4,8 @@
 #include "input_hook.h"
 #include <LoggerHelper.h>
 #include <TimeRecorder.h>
+#include <mutex_util.h>
+#include <event_util.h>
 #include <sm_util.h>
 #include <HOOK/graphics_info.h>
 #include <HOOK/hook_synchronized.h>
@@ -15,18 +17,20 @@
 #include "SDL.h"
 
 static HANDLE capture_thread = NULL;
-static HANDLE dup_hook_mutex{ NULL };
+static CommonHandlePtr_t dup_hook_mutex{ NULL };
 static std::atomic_bool stop_loop{ false };
 
 static bool init_dll(void) {
+    std::error_code ec;
     DWORD pid = GetCurrentProcessId();
-    HANDLE h;
-    h = open_mutex_plus_id("graphics_hook", pid,false);
+    char new_name[64]{ 0 };
+    std::snprintf(new_name, 64, "%s%lu", "graphics_hook", pid);
+    auto h = utilpp::OpenProcMutex(new_name,ec);
     if (h) {
-        CloseHandle(h);
+        utilpp::CloseProcMutex(h, ec);
         return false;
     }
-    dup_hook_mutex = create_mutex_plus_id("graphics_hook", pid,false);
+    dup_hook_mutex = utilpp::CreateProcMutex(new_name, ec);
     if (!dup_hook_mutex) {
         return false;
     }
@@ -37,22 +41,25 @@ static bool init_dll(void) {
 
 static inline bool init_hook(HANDLE thread_handle)
 {
+    std::error_code ec;
     if (thread_handle) {
         WaitForSingleObject(thread_handle, 100);
         CloseHandle(thread_handle);
     }
     init_dummy_window_thread();
-    SetEvent(signal_restart);
+    utilpp::SetProcEvent(signal_restart,ec);
     return true;
 }
 static void free_hook(void)
 {
+
     free_hook_info();
     free_mutexes();
     free_signals();
     if (dup_hook_mutex) {
-        CloseHandle(dup_hook_mutex);
-        dup_hook_mutex = NULL;
+        std::error_code ec;
+        utilpp::CloseProcMutex(dup_hook_mutex, ec);
+        dup_hook_mutex = NullHandle;
     }
 }
 
@@ -183,11 +190,12 @@ static inline void capture_loop(void)
 }
 static DWORD WINAPI main_capture_thread(HANDLE thread_handle)
 {
+    std::error_code ec;
     if (!init_hook(thread_handle)) {
         free_hook();
         return 0;
     }
-    WaitForSingleObject(signal_init, INFINITE);
+    utilpp::TryLockProcMutexInfinite(signal_init, ec);
     capture_loop();
     return 0;
 

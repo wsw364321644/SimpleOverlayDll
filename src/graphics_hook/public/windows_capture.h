@@ -9,9 +9,9 @@
 #define  IME_STATE_UPDATE 0x909003
 #define  SHARED_WINDOW_TEXTURE_UPDATE 0x909004
 typedef std::function<bool( LPARAM lParam)> MsgProcessorFn_t;
-typedef struct MsgProcessorHandle_t:CommonHandle_t{
-    MsgProcessorHandle_t() :CommonHandle_t() {}
-    MsgProcessorHandle_t(NullCommonHandle_t handle) :CommonHandle_t(handle) {}
+typedef struct MsgProcessorHandle_t:CommonHandle32_t{
+    MsgProcessorHandle_t() :CommonHandle32_t() {}
+    MsgProcessorHandle_t(NullCommonHandle_t handle) :CommonHandle32_t(handle) {}
     MsgProcessorFn_t Fn;
 }MsgProcessorHandle_t;
 

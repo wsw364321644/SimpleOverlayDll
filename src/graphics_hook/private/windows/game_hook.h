@@ -13,7 +13,7 @@
 typedef struct SharedWindowInfo_t {
     uint64_t Id{ 0 };
     intptr_t WindowTextureID;
-    CommonHandle_t* ShmemHandle{ nullptr };
+    CommonHandlePtr_t ShmemHandle;
     bool bPreFocused{false};
     hook_window_info_t* Info{ nullptr };
     RPCHandle_t RemoveHandle;
@@ -23,12 +23,12 @@ typedef struct SharedWindowInfo_t {
 typedef std::vector<std::shared_ptr<SharedWindowInfo_t>> SharedWindowInfos_t;
 
 extern hook_info_t* global_hook_info;
-extern HANDLE tex_mutexes[2];
-extern HANDLE signal_restart ;
-extern HANDLE signal_stop ;
-extern HANDLE signal_ready;
-extern HANDLE signal_exit;
-extern HANDLE signal_init;
+extern CommonHandlePtr_t tex_mutexes[2];
+extern CommonHandlePtr_t signal_restart ;
+extern CommonHandlePtr_t signal_stop ;
+extern CommonHandlePtr_t signal_ready;
+extern CommonHandlePtr_t signal_exit;
+extern CommonHandlePtr_t signal_init;
 extern HWND dummy_window;
 extern HINSTANCE dll_inst;
 extern char process_name[MAX_PATH];
@@ -83,6 +83,6 @@ void shmem_texture_data_unlock(int idx);
 
 void capture_free(void);
 
-RPCProcesser* get_rpc_processer();
+IRPCProcesser* get_rpc_processer();
 
 void on_window_event(uint64_t id, window_event_t& e);

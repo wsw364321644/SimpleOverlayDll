@@ -15,8 +15,6 @@ set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME "${TARGET_NAME}$<IF:
 set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS_DEBUG "/NODEFAULTLIB:LIBCMT.LIB")
 set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS_RELEASE "/NODEFAULTLIB:LIBCMTD.LIB")
 
-AddTargetInclude(${TARGET_NAME})
-
 target_link_libraries(${TARGET_NAME} PRIVATE libuv::uv_a)
 target_link_libraries(${TARGET_NAME} PRIVATE simple_utilpp_a)
 target_link_libraries(${TARGET_NAME} PRIVATE Detours::Detours)
@@ -27,11 +25,5 @@ target_link_libraries(${TARGET_NAME} PRIVATE simple_hook_helper_a)
 target_link_libraries(${TARGET_NAME} PRIVATE simple_logger_a)
 target_link_libraries(${TARGET_NAME} PRIVATE imgui_a)
 
-
-install(TARGETS ${TARGET_NAME}
-    EXPORT ${TARGET_NAME}Targets
-    LIBRARY DESTINATION sdk/lib
-    ARCHIVE DESTINATION sdk/lib
-    RUNTIME DESTINATION sdk/bin
-    PUBLIC_HEADER DESTINATION sdk/include
-)
+AddTargetInclude(${TARGET_NAME})
+AddTargetInstall(${TARGET_NAME} UTILPP)

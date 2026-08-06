@@ -97,11 +97,23 @@ static inline bool capture_stopped(void)
     return utilpp::PeekProcEvent(signal_stop, ec);
 }
 
-void init_new_pipe_client(IMessageClient* pClient) {
-
+void init_new_pipe_client(IMessageClient* pClient,const std::error_code ec) {
+    if (ec) {
+        pipe_active = false;
+        PRPCProcesser = nullptr;
+        PMessageProcesser = nullptr;
+        HookThreadSharedWindowInfos.clear();
+        SimpleValueStorage::SetValue(SharedWindowInfosHandle, HookThreadSharedWindowInfos);
+        SimpleValueStorage::SetValue(OverlayEnableHandle, false);
+        return;
+    }
     PMessageProcesser = std::make_shared<FMessageProcesser>(pClient);
-    PRPCProcesser = std::make_shared<FJRPCProcesser>(PMessageProcesser.get());
-
+    PRPCProcesser = std::make_shared<FJRPCProcesser>();
+    PRPCProcesser->Init([](std::shared_ptr<IRPCSerializable> req, std::error_code& ec)->bool {
+        FCharBuffer& buf = *FCharBuffer::GetThreadSingleton();
+        req->ToBytes(buf);
+        return PMessageProcesser->SendContent(buf.Data(), buf.Size(),0);
+    });
     auto HookHelperEventInterface = PRPCProcesser->GetInterface<JRPCHookHelperEventAPI>();
     HookHelperEventInterface->RegisterHotkeyListUpdate(
         [](HotKeyList_t& inHotKeyList) {
@@ -122,7 +134,8 @@ void init_new_pipe_client(IMessageClient* pClient) {
         }
     );
     HookHelperInterface->RegisterAddWindow([HookHelperInterface](RPCHandle_t handle, uint64_t id, std::string_view shared_mem_name) {
-        auto shmemHandle = OpenSharedMemory(shared_mem_name.data());
+        std::error_code ec;
+        auto shmemHandle = OpenSharedMemory(shared_mem_name.data(),ec);
         if (!shmemHandle) {
             HookHelperInterface->RespondError(handle, -1, "can't open shared mem");
             return;
@@ -170,7 +183,7 @@ bool init_pipe(void)
         return false;
     }
     PIpcClient = NewMessageClient({ EMessageFoundation::LIBUV });
-    PIpcClient->AddOnConnectDelegate(init_new_pipe_client);
+
     PIpcClient->AddOnDisconnectDelegate([](IMessageSession* pClient) {
         pipe_active = false;
         PRPCProcesser = nullptr;
@@ -186,7 +199,7 @@ bool init_pipe(void)
 void hook_thread_tick(void) {
     switch (PIpcClient->GetConnectionState()) {
     case EMessageConnectionState::Idle:
-        PIpcClient->Connect(EMessageConnectionType::EMCT_IPC, HOOK_IPC_PIPE);
+        PIpcClient->Connect(EMessageConnectionType::EMCT_IPC, HOOK_IPC_PIPE, std::bind(init_new_pipe_client, PIpcClient.get(), std::placeholders::_1));
         break;
     default:
         PIpcClient->Tick(0);
@@ -196,6 +209,7 @@ void hook_thread_tick(void) {
 
 bool init_hook_info(void)
 {
+    std::error_code ec;
     auto processID = GetCurrentProcessId();
 
     get_process_file_base_name_from_handle(GetCurrentProcess(), NULL, process_name, MAX_PATH);
@@ -272,7 +286,7 @@ bool init_hook_info(void)
             return true;
         }
     );
-    hook_info_handle = CreateSharedMemory(GetNamePlusID(SHMEM_HOOK_INFO, processID).c_str(), sizeof(hook_info_t));
+    hook_info_handle = CreateSharedMemory(GetNamePlusID(SHMEM_HOOK_INFO, processID).c_str(), sizeof(hook_info_t),ec);
 
     if (!hook_info_handle ) {
         return false;
@@ -524,13 +538,14 @@ static thread_data_t thread_data = { 0 };
 
 static inline bool init_shared_info(size_t size, HWND window)
 {
+    std::error_code ec;
     char name[64]{ 0 };
     HWND top = GetAncestor(window, GA_ROOT);
 
     std::snprintf(name, 64, SHMEM_TEXTURE "_%" PRIu64 "_%u",
         (uint64_t)(uintptr_t)top, ++shmem_id_counter);
 
-    shmem_handle = CreateSharedMemory(name, size);
+    shmem_handle = CreateSharedMemory(name, size,ec);
 
     if (!shmem_handle) {
         SIMPLELOG_LOGGER_ERROR(nullptr, "init_shared_info: Failed to create shared memory: {}", GetLastError());

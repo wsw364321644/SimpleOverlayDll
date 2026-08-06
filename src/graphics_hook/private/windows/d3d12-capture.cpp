@@ -4,6 +4,7 @@
 #include "windows_capture.h"
 #if COMPILE_D3D12_HOOK
 #include <windows_helper.h>
+#include <dynamic_load_library.h>
 #include <d3d11on12.h>
 #include <d3d11_4.h>
 #include <d3d12.h>
@@ -195,13 +196,13 @@ static bool create_d3d12_tex(bb_info &bb)
 
 static bool d3d12_init_11on12(ID3D12Device *device)
 {
-	static HMODULE d3d11 = nullptr;
+	static void* d3d11 = nullptr;
 	static PFN_D3D11ON12_CREATE_DEVICE create_11_on_12 = nullptr;
 	static bool initialized_11 = false;
 	static bool initialized_func = false;
 
 	if (!initialized_11 && !d3d11) {
-		d3d11 = load_system_library("d3d11.dll");
+		d3d11 = simple_dlopen("d3d11.dll");
 		if (!d3d11) {
 			SIMPLELOG_LOGGER_TRACE(nullptr,"d3d12_init_11on12: failed to load d3d11");
 		}
@@ -213,8 +214,7 @@ static bool d3d12_init_11on12(ID3D12Device *device)
 	}
 
 	if (!initialized_func && !create_11_on_12) {
-		create_11_on_12 = (PFN_D3D11ON12_CREATE_DEVICE)GetProcAddress(
-			d3d11, "D3D11On12CreateDevice");
+		create_11_on_12 = (PFN_D3D11ON12_CREATE_DEVICE)simple_dlsym(d3d11, "D3D11On12CreateDevice");
 		if (!create_11_on_12) {
 			SIMPLELOG_LOGGER_TRACE(nullptr,"d3d12_init_11on12: Failed to get "
 			     "D3D11On12CreateDevice address");
@@ -468,11 +468,11 @@ hook_execute_command_lists(ID3D12CommandQueue *queue, UINT NumCommandLists,
 }
 
 static bool
-manually_get_d3d12_addrs(HMODULE d3d12_module,
+manually_get_d3d12_addrs(void* d3d12_module,
 			 PFN_ExecuteCommandLists *execute_command_lists_addr)
 {
 	PFN_D3D12_CREATE_DEVICE create =
-		(PFN_D3D12_CREATE_DEVICE)GetProcAddress(d3d12_module,
+		(PFN_D3D12_CREATE_DEVICE)simple_dlsym(d3d12_module,
 							"D3D12CreateDevice");
 	if (!create) {
 		SIMPLELOG_LOGGER_TRACE(nullptr,"Failed to load D3D12CreateDevice");
@@ -508,7 +508,7 @@ manually_get_d3d12_addrs(HMODULE d3d12_module,
 
 bool hook_d3d12(void)
 {
-	HMODULE d3d12_module = get_system_module("d3d12.dll");
+	void* d3d12_module = simple_dlopen_exist("d3d12.dll");
 	if (!d3d12_module) {
 		SIMPLELOG_LOGGER_TRACE(nullptr,
 			"Failed to find d3d12.dll. Skipping hook attempt.");

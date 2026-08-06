@@ -1,7 +1,9 @@
 #pragma once
 
+#include <dynamic_load_library.h>
 #include <stdint.h>
 #include <memory>
+
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #ifdef __MINGW32__
@@ -198,9 +200,9 @@ static const struct patch_info patch[NUM_VERS] = {
 
 #endif
 
-static inline int get_d3d9_patch(HMODULE d3d9)
+static inline int get_d3d9_patch(void* d3d9)
 {
-	uint8_t *addr = (uint8_t *)d3d9;
+	uint8_t *addr = (uint8_t*)simple_get_offset_addr(d3d9,0);
 	for (int i = 0; i < NUM_VERS; i++) {
 		int ret = safe_memcmp(addr + patch_offset[i], patch_cmp[i],
 				      CMP_SIZE);
@@ -211,11 +213,10 @@ static inline int get_d3d9_patch(HMODULE d3d9)
 	return -1;
 }
 
-static inline uint8_t *get_d3d9_patch_addr(HMODULE d3d9, int patch)
+static inline uint8_t *get_d3d9_patch_addr(void* d3d9, int patch)
 {
 	if (patch == -1)
 		return nullptr;
 
-	uint8_t *addr = (uint8_t *)d3d9;
-	return addr + patch_offset[patch] + CMP_SIZE;
+	return (uint8_t*)simple_get_offset_addr(d3d9, patch_offset[patch] + CMP_SIZE);
 }

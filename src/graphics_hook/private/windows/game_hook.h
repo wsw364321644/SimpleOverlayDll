@@ -34,10 +34,6 @@ extern HINSTANCE dll_inst;
 extern char process_name[MAX_PATH];
 extern SharedWindowInfos_t SharedWindowInfos;
 
-static inline void* get_offset_addr(HMODULE module, uint32_t offset)
-{
-    return (void*)((uintptr_t)module + (uintptr_t)offset);
-}
 
 static inline bool duplicate_handle(HANDLE* dst, HANDLE src)
 {

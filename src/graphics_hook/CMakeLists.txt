@@ -26,4 +26,5 @@ target_link_libraries(${TARGET_NAME} PRIVATE simple_logger_a)
 target_link_libraries(${TARGET_NAME} PRIVATE imgui_a)
 
 AddTargetInclude(${TARGET_NAME})
+
 AddTargetInstall(${TARGET_NAME} UTILPP)

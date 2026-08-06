@@ -8,6 +8,7 @@
 #include "graphics_hook.h"
 #include "overlay_ui.h"
 #include "dxgi-helpers.hpp"
+#include <dynamic_load_library.h>
 #include <dxgi.h>
 #include <d3d11.h>
 #include <d3d11_4.h>
@@ -103,7 +104,7 @@ struct gl_data {
 	};
 };
 
-static HMODULE gl = NULL;
+static void* gl = NULL;
 static bool nv_capture_available = false;
 static struct gl_data data = {0};
 __declspec(thread) static int swap_recurse;
@@ -186,7 +187,7 @@ static void gl_free(void)
 
 static inline void *base_get_proc(const char *name)
 {
-	return (void *)GetProcAddress(gl, name);
+	return (void *)simple_dlsym(gl, name);
 }
 
 static inline void *wgl_get_proc(const char *name)
@@ -358,14 +359,14 @@ static inline bool gl_shtex_init_d3d11(void)
 	IDXGIAdapter *adapter;
 	HRESULT hr;
 
-	HMODULE d3d11 = load_system_library("d3d11.dll");
+	void* d3d11 = simple_dlopen("d3d11.dll");
 	if (!d3d11) {
 		SIMPLELOG_LOGGER_ERROR(nullptr,"gl_shtex_init_d3d11: failed to load D3D11.dll: {}",
 		     GetLastError());
 		return false;
 	}
 
-	HMODULE dxgi = load_system_library("dxgi.dll");
+	void* dxgi = simple_dlopen("dxgi.dll");
 	if (!dxgi) {
 		SIMPLELOG_LOGGER_ERROR(nullptr,"gl_shtex_init_d3d11: failed to load DXGI.dll: {}",
 		     GetLastError());
@@ -382,8 +383,7 @@ static inline bool gl_shtex_init_d3d11(void)
 	desc.Windowed = true;
 	desc.OutputWindow = data.hwnd;
 
-	create_dxgi_factory1_t create_factory =
-		(create_dxgi_factory1_t)GetProcAddress(dxgi, "CreateDXGIFactory1");
+	create_dxgi_factory1_t create_factory =(create_dxgi_factory1_t)simple_dlsym(dxgi, "CreateDXGIFactory1");
 	if (!create_factory) {
 		SIMPLELOG_LOGGER_ERROR(nullptr,"gl_shtex_init_d3d11: failed to load CreateDXGIFactory1 "
 		     "procedure: {}",
@@ -391,8 +391,7 @@ static inline bool gl_shtex_init_d3d11(void)
 		return false;
 	}
 
-	PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN create =
-		(PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN)GetProcAddress(d3d11, "D3D11CreateDeviceAndSwapChain");
+	PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN create =(PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN)simple_dlsym(d3d11, "D3D11CreateDeviceAndSwapChain");
 	if (!create) {
 		SIMPLELOG_LOGGER_ERROR(nullptr,"gl_shtex_init_d3d11: failed to load "
 		     "D3D11CreateDeviceAndSwapChain procedure: {}",
@@ -971,7 +970,7 @@ bool hook_gl(void)
 	void *wgl_slb_proc;
 	void *wgl_sb_proc;
 
-	gl = get_system_module("opengl32.dll");
+	gl = simple_dlopen_exist("opengl32.dll");
 	if (!gl) {
 		return false;
 	}

@@ -1,1 +1,1 @@
-cmake -A x64 -B build64
+cmake -A x64 -B build64 -DIMPORT_PROJECT_EXTERNAL_DIR=E:\project\git_project\external

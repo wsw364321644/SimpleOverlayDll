@@ -3,6 +3,7 @@
 #include "game_hook.h"
 #include "windows_capture.h"
 #include "overlay_ui.h"
+#include <dynamic_load_library.h>
 #include <d3d9.h>
 #include <d3d11.h>
 #include <d3d11_4.h>
@@ -39,7 +40,7 @@ reset_ex_t RealResetEx = NULL;
 
 
 struct d3d9_data {
-	HMODULE d3d9;
+	void* d3d9;
 	IDirect3DDevice9* device; /* do not release */
 	uint32_t cx;
 	uint32_t cy;
@@ -444,35 +445,33 @@ static inline bool shex_init_d3d11()
 	D3D_FEATURE_LEVEL level_used;
 	IDXGIFactory1* factory;
 	IDXGIAdapter1* adapter;
-	HMODULE d3d11;
-	HMODULE dxgi;
+	void* d3d11;
+	void* dxgi;
 	HRESULT hr;
 	
 	uint32_t createFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef _DEBUG
 	createFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-	d3d11 = load_system_library("d3d11.dll");
+	d3d11 = simple_dlopen("d3d11.dll");
 	if (!d3d11) {
 		SIMPLELOG_LOGGER_ERROR(nullptr, "d3d9_init: Failed to load D3D11");
 		return false;
 	}
 
-	dxgi = load_system_library("dxgi.dll");
+	dxgi = simple_dlopen("dxgi.dll");
 	if (!dxgi) {
 		SIMPLELOG_LOGGER_ERROR(nullptr, "d3d9_init: Failed to load DXGI");
 		return false;
 	}
 
-	create_factory =
-		(createfactory1_t)GetProcAddress(dxgi, "CreateDXGIFactory1");
+	create_factory =(createfactory1_t)simple_dlsym(dxgi, "CreateDXGIFactory1");
 	if (!create_factory) {
 		SIMPLELOG_LOGGER_ERROR(nullptr, "d3d9_init: Failed to get CreateDXGIFactory1 address");
 		return false;
 	}
 
-	create_device = (PFN_D3D11_CREATE_DEVICE)GetProcAddress(
-		d3d11, "D3D11CreateDevice");
+	create_device = (PFN_D3D11_CREATE_DEVICE)simple_dlsym(d3d11, "D3D11CreateDevice");
 	if (!create_device) {
 		SIMPLELOG_LOGGER_ERROR(nullptr, "d3d9_init: Failed to get D3D11CreateDevice address");
 		return false;
@@ -830,7 +829,7 @@ static void d3d9_init(IDirect3DDevice9* device)
 	HWND window = nullptr;
 	HRESULT hr;
 
-	data.d3d9 = get_system_module("d3d9.dll");
+	data.d3d9 = simple_dlopen_exist("d3d9.dll");
 	data.device = device;
 
 	hr = device->QueryInterface(__uuidof(IDirect3DDevice9Ex),
@@ -1339,7 +1338,7 @@ static void setup_reset_hooks(IDirect3DDevice9* device)
 }
 
 typedef HRESULT(WINAPI* d3d9create_ex_t)(UINT, IDirect3D9Ex**);
-static bool manually_get_d3d9_addrs(HMODULE d3d9_module, void** present_addr,
+static bool manually_get_d3d9_addrs(void* d3d9_module, void** present_addr,
 	void** present_ex_addr,
 	void** present_swap_addr)
 {
@@ -1352,7 +1351,7 @@ static bool manually_get_d3d9_addrs(HMODULE d3d9_module, void** present_addr,
 
 	SIMPLELOG_LOGGER_TRACE(nullptr,"D3D9 values invalid, manually obtaining");
 
-	create_ex = (d3d9create_ex_t)GetProcAddress(d3d9_module,
+	create_ex = (d3d9create_ex_t)simple_dlsym(d3d9_module,
 		"Direct3DCreate9Ex");
 	if (!create_ex) {
 		SIMPLELOG_LOGGER_ERROR(nullptr,"Failed to load Direct3DCreate9Ex");
@@ -1403,7 +1402,7 @@ static bool manually_get_d3d9_addrs(HMODULE d3d9_module, void** present_addr,
 
 bool hook_d3d9(void)
 {
-	HMODULE d3d9_module = get_system_module("d3d9.dll");
+	void* d3d9_module = simple_dlopen_exist("d3d9.dll");
 	uint32_t d3d9_size;
 	void* present_addr = nullptr;
 	void* present_ex_addr = nullptr;
@@ -1413,22 +1412,19 @@ bool hook_d3d9(void)
 		return false;
 	}
 
-	MODULEINFO info;
-	bool success = !!GetModuleInformation(GetCurrentProcess(), d3d9_module,&info, sizeof(info));
-	if (!success) {
+	d3d9_size = simple_get_module_size(d3d9_module);
+	if (!d3d9_size) {
 		return false;
 	}
-	d3d9_size = info.SizeOfImage;
-
 	if (global_hook_info->offsets.d3d9.present < d3d9_size &&
 		global_hook_info->offsets.d3d9.present_ex < d3d9_size &&
 		global_hook_info->offsets.d3d9.present_swap < d3d9_size) {
 
-		present_addr = get_offset_addr(
+		present_addr = simple_get_offset_addr(
 			d3d9_module, global_hook_info->offsets.d3d9.present);
-		present_ex_addr = get_offset_addr(
+		present_ex_addr = simple_get_offset_addr(
 			d3d9_module, global_hook_info->offsets.d3d9.present_ex);
-		present_swap_addr = get_offset_addr(
+		present_swap_addr = simple_get_offset_addr(
 			d3d9_module,
 			global_hook_info->offsets.d3d9.present_swap);
 	}
@@ -1466,7 +1462,7 @@ bool hook_d3d9(void)
 	}
 
 	const LONG error = DetourTransactionCommit();
-	success = error == NO_ERROR;
+	bool success = error == NO_ERROR;
 	if (success) {
 		if (RealPresentSwap)
 			SIMPLELOG_LOGGER_TRACE(nullptr,"Hooked IDirect3DSwapChain9::Present");

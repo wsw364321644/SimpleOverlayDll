@@ -1,10 +1,12 @@
+#include "graphics_hook.h"
+#include<dynamic_load_library.h>
 #include <d3d10_1.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <d3dcompiler.h>
 #include <inttypes.h>
 
-#include "graphics_hook.h"
+
 #include <LoggerHelper.h>
 #include <windows_helper.h>
 #include <detours.h>
@@ -316,7 +318,7 @@ hook_present1(IDXGISwapChain1 *swap, UINT sync_interval, UINT flags,
 
 bool hook_dxgi(void)
 {
-	HMODULE dxgi_module = get_system_module("dxgi.dll");
+	void* dxgi_module = simple_dlopen_exist("dxgi.dll");
 	if (!dxgi_module) {
 		SIMPLELOG_LOGGER_TRACE(nullptr,"Failed to find dxgi.dll. Skipping hook attempt.");
 		return false;
@@ -324,17 +326,17 @@ bool hook_dxgi(void)
 
 	/* ---------------------- */
 
-	void *present_addr = get_offset_addr(
+	void *present_addr = simple_get_offset_addr(
 		dxgi_module, global_hook_info->offsets.dxgi.present);
-	void *resize_addr = get_offset_addr(
+	void *resize_addr = simple_get_offset_addr(
 		dxgi_module, global_hook_info->offsets.dxgi.resize);
 	void *present1_addr = nullptr;
 	if (global_hook_info->offsets.dxgi.present1)
-		present1_addr = get_offset_addr(
+		present1_addr = simple_get_offset_addr(
 			dxgi_module, global_hook_info->offsets.dxgi.present1);
 	void *release_addr = nullptr;
 	if (global_hook_info->offsets.dxgi2.release)
-		release_addr = get_offset_addr(
+		release_addr = simple_get_offset_addr(
 			dxgi_module, global_hook_info->offsets.dxgi2.release);
 
 	DetourTransactionBegin();

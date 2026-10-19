@@ -11,6 +11,7 @@ set(VERSION "${MY_PRODUCT_NUMBER}.${MY_PRODUCT_VERSION}.${MY_BUILD_NUMBER}")
 set(UTILPP_TAG c188e7f429177809563b691222e1c887f64ea7f5)
 set(OVERLAY_UTIL_TAG 2524119b2fb3e412aec7f2ac2a807ec2bad1aec1)
 
+set(SSH)
 project(simple_overlay_dll VERSION ${VERSION})
 enable_language(CXX ASM)
 include(GNUInstallDirs)
@@ -52,12 +53,12 @@ include(ProjectImport)
 include(TargetImport)
 include(ProgramImport)
 
-ImportProject(Detours SSH TAG main)
-ImportProject(libuv STATIC_CRT SSH TAG v1.52.1)
-ImportProject(SDL2 STATIC_CRT SSH TAG release-2.32.10)
+ImportProject(Detours ${SSH} TAG main)
+ImportProject(libuv STATIC_CRT ${SSH} TAG v1.52.1)
+ImportProject(SDL2 STATIC_CRT ${SSH} TAG release-2.32.10)
 
 # ImportProject(GLEW STATIC_CRT URL https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.zip) # 2.2.0
-ImportTarget(imgui SSH TAG v1.92.5)
+ImportTarget(imgui ${SSH} TAG v1.92.5)
 
 # find_package(GLEW REQUIRED)
 # ############################

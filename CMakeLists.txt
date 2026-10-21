@@ -1,18 +1,36 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 4.2)
 include(FetchContent)
 include(CMakePackageConfigHelpers)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
 set(MY_PRODUCT_NUMBER 1)
 set(MY_PRODUCT_VERSION 0)
 set(MY_BUILD_NUMBER 0)
 set(VERSION "${MY_PRODUCT_NUMBER}.${MY_PRODUCT_VERSION}.${MY_BUILD_NUMBER}")
 
-set(UTILPP_TAG c188e7f429177809563b691222e1c887f64ea7f5)
+set(UTILPP_TAG 7c3e21239e0a805c70e1ec1a8e520933c5be2bfc)
 set(OVERLAY_UTIL_TAG 2524119b2fb3e412aec7f2ac2a807ec2bad1aec1)
 
 set(SSH)
 project(simple_overlay_dll VERSION ${VERSION})
+if(MSVC AND NOT DEFINED CMAKE_ASM_COMPILER)
+	get_filename_component(_utilpp_msvc_bin "${CMAKE_C_COMPILER}" DIRECTORY)
+	find_program(_utilpp_ml
+		NAMES
+		ml64.exe
+		ml.exe
+		HINTS
+		"${_utilpp_msvc_bin}"
+		NO_DEFAULT_PATH
+	)
+	if(_utilpp_ml)
+		set(CMAKE_ASM_COMPILER "${_utilpp_ml}" CACHE FILEPATH "ASM compiler")
+	endif()
+	unset(_utilpp_msvc_bin)
+	unset(_utilpp_ml)
+endif()
+
 enable_language(CXX ASM)
 include(GNUInstallDirs)
 
@@ -38,7 +56,11 @@ if(PROJECT_IS_TOP_LEVEL)
 			FORCE
 		)
 	endif()
+
+	set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO RELEASE)
+	set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL RELEASE)
 endif()
+
 
 FetchContent_Declare(
 	OCmakeUtil
@@ -58,7 +80,7 @@ ImportProject(libuv STATIC_CRT ${SSH} TAG v1.52.1)
 ImportProject(SDL2 STATIC_CRT ${SSH} TAG release-2.32.10)
 
 # ImportProject(GLEW STATIC_CRT URL https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.zip) # 2.2.0
-ImportTarget(imgui ${SSH} TAG v1.92.5)
+ImportProject(imgui STATIC_CRT ${SSH} TAG v1.93.0)
 
 # find_package(GLEW REQUIRED)
 # ############################

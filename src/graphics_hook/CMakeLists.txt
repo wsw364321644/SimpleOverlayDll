@@ -16,14 +16,15 @@ set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS_DEBUG "/NODEFAULTLIB:
 set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS_RELEASE "/NODEFAULTLIB:LIBCMTD.LIB")
 
 target_link_libraries(${TARGET_NAME} PRIVATE libuv::uv_a)
-target_link_libraries(${TARGET_NAME} PRIVATE simple_utilpp_a)
 target_link_libraries(${TARGET_NAME} PRIVATE Detours::Detours)
-target_link_libraries(${TARGET_NAME} PRIVATE windows_util_a)
-target_link_libraries(${TARGET_NAME} PRIVATE rpc_parser_a)
-target_link_libraries(${TARGET_NAME} PRIVATE ipc_util_a)
-target_link_libraries(${TARGET_NAME} PRIVATE simple_hook_helper_a)
-target_link_libraries(${TARGET_NAME} PRIVATE simple_logger_a)
-target_link_libraries(${TARGET_NAME} PRIVATE imgui_a)
+target_link_libraries(${TARGET_NAME} PRIVATE imgui::imgui_a)
+target_link_libraries(${TARGET_NAME} PRIVATE UTILPP::windows_util_a)
+target_link_libraries(${TARGET_NAME} PRIVATE UTILPP::rpc_parser_a)
+target_link_libraries(${TARGET_NAME} PRIVATE UTILPP::ipc_util_a)
+target_link_libraries(${TARGET_NAME} PRIVATE UTILPP::simple_logger_a)
+target_link_libraries(${TARGET_NAME} PRIVATE UTILPP::simple_utilpp_a)
+target_link_libraries(${TARGET_NAME} PRIVATE OverlayUtil::simple_hook_helper_a)
+
 
 AddTargetInclude(${TARGET_NAME})
 
